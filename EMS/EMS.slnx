@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="EMS_API/EMS_API.csproj" />
+  <Project Path="EMS_Application/EMS_Application.csproj" />
+  <Project Path="EMS_Domain/EMS_Domain.csproj" />
+  <Project Path="EMS_Infrastructure/EMS_Infrastructure.csproj" />
+</Solution>
