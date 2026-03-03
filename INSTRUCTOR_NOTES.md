@@ -122,12 +122,25 @@ Issues found:
 - `.Must(code => code == code.ToUpper())` — NullReferenceException if Code is null (PENDING FIX)
 - Create and Update validators are 100% duplicated (acceptable since DTOs are different types)
 
-#### What is still pending to complete M2:
-1. Fix uppercase validator null-safety bug in both Department validators
-2. Global Exception Handling Middleware (NotFoundException→404, ValidationException→422, BadRequestException→400, other→500)
-3. Replace KeyNotFoundException with NotFoundException in services
-4. Remove try-catch from controllers
-5. Register middleware in Program.cs
+#### M2 Review #3 (Final) — 2026-03-04 — COMPLETED
+**Score: 8.5/10**
+
+All remaining items implemented:
+1. Uppercase validator bug — fixed with `Matches(@"^[A-Z0-9]+$")` (smarter than null guard)
+2. Global Exception Handling Middleware — switch expression, proper status codes, camelCase JSON
+3. NotFoundException used correctly in both services (nameof bug caught and fixed)
+4. Controllers cleaned — no try-catch, ApiResponse<T> throughout
+5. Middleware registered in Program.cs
+6. Validators injected in BOTH services (was missing from DepartmentService — caught in review, fixed)
+
+Bugs found during final review (both fixed):
+- `nameof(department)` / `nameof(existing)` producing wrong entity names in NotFoundException — fixed to string literals
+- DepartmentService not injecting/using validators despite validators existing — fixed
+
+Minor carry-forward items (not blocking):
+- Validation GroupBy/ToDictionary logic duplicated 4x — extract helper eventually
+- `Exceptions.ValidationException` fully qualified (namespace conflict) — using alias would be cleaner
+- `null!` in delete responses — works but is a code smell
 
 ## Strengths Identified (Across Milestones)
 1. Learns from feedback — every M1 issue was addressed, ApiResponse fix applied immediately

@@ -13,13 +13,15 @@ I am a .NET developer with 3 years of experience. I'm building this project to m
 
 ---
 
-## Current Project Structure (ACTUAL — as of M2 ~80% complete)
+## Current Project Structure (ACTUAL — as of M2 complete)
 ```
 EMS/
 ├── EMS_API/
 │   ├── Controllers/
 │   │   ├── DepartmentController.cs
 │   │   └── EmployeeController.cs
+│   ├── Middleware/
+│   │   └── ExceptionHandlingMiddleware.cs    ← NEW in M2
 │   ├── Program.cs
 │   └── EMS_API.csproj
 ├── EMS_Application/
@@ -134,7 +136,7 @@ EMS/
 | # | Milestone | Status |
 |---|---|---|
 | 1 | Project Setup & Clean Architecture | COMPLETED (Score: 7.5/10) |
-| 2 | DTOs, Validation & Error Handling | IN PROGRESS (~80%) |
+| 2 | DTOs, Validation & Error Handling | COMPLETED (Score: 8.5/10) |
 | 3 | Authentication & Authorization | Not Started |
 | 4 | Advanced Querying & Performance | Not Started |
 | 5 | CQRS with MediatR | Not Started |
@@ -164,58 +166,28 @@ EMS/
 
 ---
 
-## Milestone 2 — Current Status (IN PROGRESS ~80%)
+## Milestone 2 — COMPLETED (Score: 8.5/10)
 
-### What's DONE:
+### What was delivered:
 - [x] All 6 DTOs: CreateDepartmentRequest, UpdateDepartmentRequest, DepartmentResponse, CreateEmployeeRequest, UpdateEmployeeRequest, EmployeeResponse
 - [x] Manual mapping extension methods: DepartmentMapping (ToResponse, ToEntity, ApplyUpdate), EmployeeMapping (ToResponse, ToEntity, ApplyUpdate)
 - [x] Service interfaces updated: accept DTOs, return Response DTOs
 - [x] Services refactored: use mapping, use FindAsync consistently
-- [x] Controllers updated: use Request DTOs
+- [x] Controllers updated: use Request DTOs, thin (no try-catch)
 - [x] Employee queries include Department navigation (for DepartmentName in response)
 - [x] Domain restructured: Entities/ folder, Enum/ folder
 - [x] Swagger added to Program.cs
 - [x] Custom Exceptions created (NotFoundException, BadRequestException, ValidationException)
 - [x] ApiResponse<T> wrapper created with factory methods (SuccessResponse, FailResponse)
-- [x] FluentValidation validators created (4 validators with all rules)
+- [x] FluentValidation validators created (4 validators with all rules, null-safe with Matches regex)
 - [x] FluentValidation package installed (FluentValidation.DependencyInjectionExtensions 12.1.1)
 - [x] Validators registered in DependencyInjection.cs via AddValidatorsFromAssembly
+- [x] Validators injected and called in both services (service-layer validation)
+- [x] Global Exception Handling Middleware (NotFoundException→404, ValidationException→422, BadRequestException→400, unhandled→500)
+- [x] Middleware registered in Program.cs
+- [x] NotFoundException uses proper entity names ("Department", "Employee") not variable names
 
-### What's REMAINING:
-
-#### 1. Fix uppercase validator null-safety bug
-In CreateDepartmentValidator and UpdateDepartmentValidator, the `.Must(code => code == code.ToUpper())` rule will throw NullReferenceException if Code is null. Fix with null guard: `.Must(code => code != null && code == code.ToUpper())` or use `.Matches(@"^[A-Z]+$")`.
-
-#### 2. Global Exception Handling Middleware
-Create in `EMS_API/Middleware/ExceptionHandlingMiddleware.cs`:
-- Wrap `await _next(context)` in try-catch
-- Catch custom exceptions and map to HTTP status codes:
-
-| Exception Type | HTTP Status Code |
-|---|---|
-| NotFoundException | 404 |
-| ValidationException | 422 |
-| BadRequestException | 400 |
-| Any other exception | 500 ("Internal server error" — don't leak details) |
-
-- Return `ApiResponse<object>.FailResponse(...)` as JSON
-- For ValidationException, include the Errors dictionary
-- Register in Program.cs with `app.UseMiddleware<ExceptionHandlingMiddleware>()`
-
-#### 3. Replace KeyNotFoundException with NotFoundException in Services
-In DepartmentService and EmployeeService, replace:
-```csharp
-throw new KeyNotFoundException($"Department with ID {id} not found.");
-```
-With:
-```csharp
-throw new NotFoundException("Department", id);
-```
-
-#### 4. Clean up controllers
-Remove all try-catch blocks from controllers. The middleware handles everything now.
-
-### Implementation Details of Completed Work:
+### Implementation Details:
 
 #### Custom Exceptions (EMS_Application/Exceptions/)
 - **NotFoundException** — constructor: `(string entityName, object key)`, message: `"{entityName} ({key}) was not found."`
@@ -239,7 +211,7 @@ public class ApiResponse<T>
 #### Validators (EMS_Application/Validators/)
 **Department validators (Create + Update):**
 - Name: NotEmpty, Length(2, 100)
-- Code: NotEmpty, Length(2, 10), Must be uppercase (needs null guard fix)
+- Code: NotEmpty, Length(2, 10), Matches `^[A-Z0-9]+$` (uppercase + digits only)
 - Description: MaximumLength(500)
 
 **Employee validators (Create + Update):**

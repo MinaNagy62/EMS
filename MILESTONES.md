@@ -28,38 +28,31 @@ Small in scope, but deep in patterns and best practices.
 
 ---
 
-## Milestone 2: DTOs, Validation & Global Error Handling — IN PROGRESS (~80%)
-**Challenge:** Never expose domain entities directly. Handle errors like a pro.
+## Milestone 2: DTOs, Validation & Global Error Handling — COMPLETED ✓
+**Score: 8.5/10**
 
-### What's DONE:
-- [x] Request/Response DTOs (CreateDepartmentRequest, UpdateDepartmentRequest, DepartmentResponse, CreateEmployeeRequest, UpdateEmployeeRequest, EmployeeResponse)
-- [x] Manual mapping with extension methods (DepartmentMapping, EmployeeMapping) — includes ApplyUpdate pattern
+### Everything delivered:
+- [x] Request/Response DTOs (6 total)
+- [x] Manual mapping with extension methods (ApplyUpdate pattern)
 - [x] Service interfaces updated to use DTOs
 - [x] Services refactored to use mapping
 - [x] Controllers updated to use DTOs
 - [x] Employee queries include Department navigation (for DepartmentName)
 - [x] Domain restructured (Entities/ folder, Enum/ folder)
 - [x] All M1 carry-forward fixes applied
-- [x] Custom Exceptions (NotFoundException, BadRequestException, ValidationException) in EMS_Application/Exceptions/
-- [x] ApiResponse<T> wrapper with factory methods in EMS_Application/Common/
-- [x] FluentValidation validators (4 files) in EMS_Application/Validators/
-- [x] FluentValidation.DependencyInjectionExtensions package installed
-- [x] Validators registered in DependencyInjection.cs via AddValidatorsFromAssembly
+- [x] Custom Exceptions (NotFoundException, BadRequestException, ValidationException)
+- [x] ApiResponse<T> wrapper with factory methods
+- [x] FluentValidation validators (4 files) with correct rules
+- [x] Validators registered via AddValidatorsFromAssembly
+- [x] Validators injected and used in both services
+- [x] Global Exception Handling Middleware (404/422/400/500)
+- [x] Controllers cleaned — no try-catch, ApiResponse<T> wrapping
+- [x] Middleware registered in Program.cs
 
-### What's REMAINING:
-- [ ] Fix uppercase validator null-safety bug in Department validators
-- [ ] Global Exception Handling Middleware in API/Middleware/
-  - NotFoundException → 404
-  - ValidationException → 422
-  - BadRequestException → 400
-  - Any other → 500 (don't leak details)
-- [ ] Replace KeyNotFoundException with NotFoundException in services
-- [ ] Remove try-catch from controllers (middleware handles everything)
-- [ ] Register middleware in Program.cs
-
-**Review scores so far:**
-- M2 Review #1 (DTOs & Mapping): Good — ApplyUpdate pattern, clean extension methods
-- M2 Review #2 (Exceptions, ApiResponse, Validators): 8/10 — one null-safety bug to fix
+**Review scores:**
+- M2 Review #1 (DTOs & Mapping): Good
+- M2 Review #2 (Exceptions, ApiResponse, Validators): 8/10
+- M2 Review #3 (Final — Middleware, cleanup): 8.5/10 — COMPLETED
 
 **Interview topics this covers:**
 - "Why use DTOs?"
