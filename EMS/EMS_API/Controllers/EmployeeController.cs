@@ -1,3 +1,4 @@
+using EMS_Application.Common;
 using EMS_Application.DTO.Employee;
 using EMS_Application.Interfaces.Employees;
 using Microsoft.AspNetCore.Mvc;
@@ -19,52 +20,35 @@ public class EmployeeController : ControllerBase
     public async Task<IActionResult> GetAll()
     {
         var employees = await _employeeService.GetAllEmployeesAsync();
-        return Ok(employees);
+        return Ok(ApiResponse<IEnumerable<EmployeeResponse>>.SuccessResponse(employees));
     }
 
     [HttpGet("{id}")]
     public async Task<IActionResult> GetById(int id)
     {
         var employee = await _employeeService.GetEmployeeByIdAsync(id);
-
-        if (employee is null)
-            return NotFound();
-
-        return Ok(employee);
+        return Ok(ApiResponse<EmployeeResponse>.SuccessResponse(employee));
     }
 
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateEmployeeRequest request)
     {
         var created = await _employeeService.CreateEmployeeAsync(request);
-        return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
+        return CreatedAtAction(nameof(GetById), new { id = created.Id },
+            ApiResponse<EmployeeResponse>.SuccessResponse(created, "Employee created successfully."));
     }
 
     [HttpPut("{id}")]
     public async Task<IActionResult> Update(int id, [FromBody] UpdateEmployeeRequest request)
     {
-        try
-        {
-            var updated = await _employeeService.UpdateEmployeeAsync(id, request);
-            return Ok(updated);
-        }
-        catch (KeyNotFoundException)
-        {
-            return NotFound();
-        }
+        var updated = await _employeeService.UpdateEmployeeAsync(id, request);
+        return Ok(ApiResponse<EmployeeResponse>.SuccessResponse(updated, "Employee updated successfully."));
     }
 
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(int id)
     {
-        try
-        {
-            await _employeeService.DeleteEmployeeAsync(id);
-            return NoContent();
-        }
-        catch (KeyNotFoundException)
-        {
-            return NotFound();
-        }
+        await _employeeService.DeleteEmployeeAsync(id);
+        return Ok(ApiResponse<object>.SuccessResponse(null!, "Employee deleted successfully."));
     }
 }

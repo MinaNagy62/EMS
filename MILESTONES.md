@@ -28,7 +28,7 @@ Small in scope, but deep in patterns and best practices.
 
 ---
 
-## Milestone 2: DTOs, Validation & Global Error Handling — IN PROGRESS (50%)
+## Milestone 2: DTOs, Validation & Global Error Handling — IN PROGRESS (~80%)
 **Challenge:** Never expose domain entities directly. Handle errors like a pro.
 
 ### What's DONE:
@@ -40,27 +40,26 @@ Small in scope, but deep in patterns and best practices.
 - [x] Employee queries include Department navigation (for DepartmentName)
 - [x] Domain restructured (Entities/ folder, Enum/ folder)
 - [x] All M1 carry-forward fixes applied
+- [x] Custom Exceptions (NotFoundException, BadRequestException, ValidationException) in EMS_Application/Exceptions/
+- [x] ApiResponse<T> wrapper with factory methods in EMS_Application/Common/
+- [x] FluentValidation validators (4 files) in EMS_Application/Validators/
+- [x] FluentValidation.DependencyInjectionExtensions package installed
+- [x] Validators registered in DependencyInjection.cs via AddValidatorsFromAssembly
 
 ### What's REMAINING:
-- [ ] FluentValidation validators (4 files)
-  - CreateDepartmentValidator: Name required (2-100), Code required (2-10, uppercase), Description max 500
-  - UpdateDepartmentValidator: same rules
-  - CreateEmployeeValidator: FirstName/LastName (2-50), Email required+valid, Phone max 20, DOB in past, HireDate past/today, Salary>0, Gender valid, JobTitle (2-100), DepartmentId>0
-  - UpdateEmployeeValidator: same rules
-- [ ] Custom exceptions in Application/Exceptions/
-  - NotFoundException — for entity not found
-  - BadRequestException — general bad request
-  - ValidationException — wraps FluentValidation errors
-- [ ] Replace KeyNotFoundException with NotFoundException in services
+- [ ] Fix uppercase validator null-safety bug in Department validators
 - [ ] Global Exception Handling Middleware in API/Middleware/
   - NotFoundException → 404
   - ValidationException → 422
   - BadRequestException → 400
   - Any other → 500 (don't leak details)
-- [ ] ApiResponse<T> wrapper (Success, Message, Data, Errors)
+- [ ] Replace KeyNotFoundException with NotFoundException in services
 - [ ] Remove try-catch from controllers (middleware handles everything)
-- [ ] Register FluentValidation in AddApplication()
 - [ ] Register middleware in Program.cs
+
+**Review scores so far:**
+- M2 Review #1 (DTOs & Mapping): Good — ApplyUpdate pattern, clean extension methods
+- M2 Review #2 (Exceptions, ApiResponse, Validators): 8/10 — one null-safety bug to fix
 
 **Interview topics this covers:**
 - "Why use DTOs?"

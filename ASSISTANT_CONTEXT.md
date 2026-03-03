@@ -1,7 +1,7 @@
 # EMS Project - Assistant Context
 
 ## Role
-You are an assistant helping me (Minan) build this project. The project owner/instructor is another Claude session that reviews my code. You help me write code, answer questions, and implement milestones. Follow the exact specifications below — don't deviate from what's been decided.
+You are an assistant helping me (Minan) build this project. The project owner/instructor is another Claude Code session that reviews my code. You help me write code, answer questions, and implement milestones. Follow the exact specifications below — don't deviate from what's been decided.
 
 ## Who I Am
 I am a .NET developer with 3 years of experience. I'm building this project to master backend patterns and prepare for interviews.
@@ -13,7 +13,7 @@ I am a .NET developer with 3 years of experience. I'm building this project to m
 
 ---
 
-## Current Project Structure (ACTUAL — as of latest session)
+## Current Project Structure (ACTUAL — as of M2 ~80% complete)
 ```
 EMS/
 ├── EMS_API/
@@ -23,6 +23,8 @@ EMS/
 │   ├── Program.cs
 │   └── EMS_API.csproj
 ├── EMS_Application/
+│   ├── Common/
+│   │   └── ApiResponse.cs                     ← NEW in M2
 │   ├── DTO/
 │   │   ├── Department/
 │   │   │   ├── CreateDepartmentRequest.cs
@@ -32,6 +34,10 @@ EMS/
 │   │       ├── CreateEmployeeRequest.cs
 │   │       ├── UpdateEmployeeRequest.cs
 │   │       └── EmployeeResponse.cs
+│   ├── Exceptions/
+│   │   ├── BadRequestException.cs             ← NEW in M2
+│   │   ├── NotFoundException.cs               ← NEW in M2
+│   │   └── ValidationException.cs             ← NEW in M2
 │   ├── Interfaces/
 │   │   ├── Departments/
 │   │   │   ├── IDepartmentService.cs
@@ -47,6 +53,11 @@ EMS/
 │   ├── Services/
 │   │   ├── DepartmentService.cs
 │   │   └── EmployeeService.cs
+│   ├── Validators/
+│   │   ├── CreateDepartmentValidator.cs       ← NEW in M2
+│   │   ├── UpdateDepartmentValidator.cs       ← NEW in M2
+│   │   ├── CreateEmployeeValidator.cs         ← NEW in M2
+│   │   └── UpdateEmployeeValidator.cs         ← NEW in M2
 │   ├── DependencyInjection.cs
 │   └── EMS_Application.csproj
 ├── EMS_Domain/
@@ -77,7 +88,7 @@ EMS/
 
 **NuGet Packages installed:**
 - EMS_API: Microsoft.AspNetCore.OpenApi, Microsoft.EntityFrameworkCore.Design, Swashbuckle.AspNetCore
-- EMS_Application: Microsoft.Extensions.DependencyInjection.Abstractions
+- EMS_Application: Microsoft.Extensions.DependencyInjection.Abstractions, FluentValidation.DependencyInjectionExtensions (12.1.1)
 - EMS_Infrastructure: Microsoft.EntityFrameworkCore.SqlServer, Microsoft.EntityFrameworkCore.Tools
 - EMS_Domain: none
 
@@ -123,7 +134,7 @@ EMS/
 | # | Milestone | Status |
 |---|---|---|
 | 1 | Project Setup & Clean Architecture | COMPLETED (Score: 7.5/10) |
-| 2 | DTOs, Validation & Error Handling | IN PROGRESS (~50%) |
+| 2 | DTOs, Validation & Error Handling | IN PROGRESS (~80%) |
 | 3 | Authentication & Authorization | Not Started |
 | 4 | Advanced Querying & Performance | Not Started |
 | 5 | CQRS with MediatR | Not Started |
@@ -153,7 +164,7 @@ EMS/
 
 ---
 
-## Milestone 2 — Current Status (IN PROGRESS ~50%)
+## Milestone 2 — Current Status (IN PROGRESS ~80%)
 
 ### What's DONE:
 - [x] All 6 DTOs: CreateDepartmentRequest, UpdateDepartmentRequest, DepartmentResponse, CreateEmployeeRequest, UpdateEmployeeRequest, EmployeeResponse
@@ -164,81 +175,21 @@ EMS/
 - [x] Employee queries include Department navigation (for DepartmentName in response)
 - [x] Domain restructured: Entities/ folder, Enum/ folder
 - [x] Swagger added to Program.cs
+- [x] Custom Exceptions created (NotFoundException, BadRequestException, ValidationException)
+- [x] ApiResponse<T> wrapper created with factory methods (SuccessResponse, FailResponse)
+- [x] FluentValidation validators created (4 validators with all rules)
+- [x] FluentValidation package installed (FluentValidation.DependencyInjectionExtensions 12.1.1)
+- [x] Validators registered in DependencyInjection.cs via AddValidatorsFromAssembly
 
-### What's REMAINING — This is what needs to be built next:
+### What's REMAINING:
 
-#### 1. FluentValidation Validators
-Install `FluentValidation.DependencyInjectionExtensions` in EMS_Application.
+#### 1. Fix uppercase validator null-safety bug
+In CreateDepartmentValidator and UpdateDepartmentValidator, the `.Must(code => code == code.ToUpper())` rule will throw NullReferenceException if Code is null. Fix with null guard: `.Must(code => code != null && code == code.ToUpper())` or use `.Matches(@"^[A-Z]+$")`.
 
-Create in `EMS_Application/Validators/`:
-
-**CreateDepartmentValidator:**
-- Name: required, length 2-100
-- Code: required, length 2-10, must be uppercase
-- Description: max 500
-
-**UpdateDepartmentValidator:** same rules as Create
-
-**CreateEmployeeValidator:**
-- FirstName: required, length 2-50
-- LastName: required, length 2-50
-- Email: required, valid email format
-- Phone: max 20
-- DateOfBirth: must be in the past
-- HireDate: must be in the past or today
-- Salary: greater than 0
-- Gender: must be valid enum value
-- JobTitle: required, length 2-100
-- DepartmentId: greater than 0
-
-**UpdateEmployeeValidator:** same rules as Create
-
-#### 2. Custom Exceptions
-Create in `EMS_Application/Exceptions/`:
-
-**NotFoundException.cs:**
-```csharp
-public class NotFoundException : Exception
-{
-    public NotFoundException(string message) : base(message) { }
-}
-```
-
-**BadRequestException.cs:**
-```csharp
-public class BadRequestException : Exception
-{
-    public BadRequestException(string message) : base(message) { }
-}
-```
-
-**ValidationException.cs:** (wraps FluentValidation errors)
-```csharp
-public class ValidationException : Exception
-{
-    public List<string> Errors { get; }
-    public ValidationException(List<string> errors) : base("Validation failed")
-    {
-        Errors = errors;
-    }
-}
-```
-
-#### 3. Replace KeyNotFoundException in Services
-In DepartmentService and EmployeeService, replace:
-```csharp
-throw new KeyNotFoundException($"Department with ID {id} not found.");
-```
-With:
-```csharp
-throw new NotFoundException($"Department with ID {id} not found.");
-```
-
-#### 4. Add validation in services
-Inject `IValidator<CreateDepartmentRequest>` etc. into services. Before processing, validate the request and throw custom `ValidationException` if invalid.
-
-#### 5. Global Exception Handling Middleware
+#### 2. Global Exception Handling Middleware
 Create in `EMS_API/Middleware/ExceptionHandlingMiddleware.cs`:
+- Wrap `await _next(context)` in try-catch
+- Catch custom exceptions and map to HTTP status codes:
 
 | Exception Type | HTTP Status Code |
 |---|---|
@@ -247,64 +198,73 @@ Create in `EMS_API/Middleware/ExceptionHandlingMiddleware.cs`:
 | BadRequestException | 400 |
 | Any other exception | 500 ("Internal server error" — don't leak details) |
 
-#### 6. ApiResponse<T> Wrapper
-Create in `EMS_Application/DTO/Common/ApiResponse.cs`:
+- Return `ApiResponse<object>.FailResponse(...)` as JSON
+- For ValidationException, include the Errors dictionary
+- Register in Program.cs with `app.UseMiddleware<ExceptionHandlingMiddleware>()`
+
+#### 3. Replace KeyNotFoundException with NotFoundException in Services
+In DepartmentService and EmployeeService, replace:
+```csharp
+throw new KeyNotFoundException($"Department with ID {id} not found.");
+```
+With:
+```csharp
+throw new NotFoundException("Department", id);
+```
+
+#### 4. Clean up controllers
+Remove all try-catch blocks from controllers. The middleware handles everything now.
+
+### Implementation Details of Completed Work:
+
+#### Custom Exceptions (EMS_Application/Exceptions/)
+- **NotFoundException** — constructor: `(string entityName, object key)`, message: `"{entityName} ({key}) was not found."`
+- **BadRequestException** — constructor: `(string message)`
+- **ValidationException** — constructor: `(IDictionary<string, string[]> errors)`, has `Errors` property, message: `"One or more validation errors occurred."`
+
+#### ApiResponse<T> (EMS_Application/Common/ApiResponse.cs)
 ```csharp
 public class ApiResponse<T>
 {
     public bool Success { get; set; }
-    public string? Message { get; set; }
+    public string Message { get; set; } = string.Empty;
     public T? Data { get; set; }
-    public List<string>? Errors { get; set; }
+    public IDictionary<string, string[]>? Errors { get; set; }
+
+    public static ApiResponse<T> SuccessResponse(T data, string message = "Request completed successfully.")
+    public static ApiResponse<T> FailResponse(string message, IDictionary<string, string[]>? errors = null)
 }
 ```
 
-All endpoints should return this wrapper.
+#### Validators (EMS_Application/Validators/)
+**Department validators (Create + Update):**
+- Name: NotEmpty, Length(2, 100)
+- Code: NotEmpty, Length(2, 10), Must be uppercase (needs null guard fix)
+- Description: MaximumLength(500)
 
-#### 7. Clean up controllers
-Remove all try-catch blocks from controllers. The middleware handles everything now. Controllers become thin — just call service and wrap in ApiResponse.
+**Employee validators (Create + Update):**
+- FirstName: NotEmpty, Length(2, 50)
+- LastName: NotEmpty, Length(2, 50)
+- Email: NotEmpty, EmailAddress
+- Phone: MaximumLength(20)
+- DateOfBirth: LessThan(DateTime.Today)
+- HireDate: LessThanOrEqualTo(DateTime.Today)
+- Salary: GreaterThan(0)
+- Gender: IsInEnum
+- JobTitle: NotEmpty, Length(2, 100)
+- DepartmentId: GreaterThan(0)
 
-#### 8. Register everything
-- Register FluentValidation validators in `AddApplication()` using `services.AddValidatorsFromAssembly()`
-- Register middleware in `Program.cs` using `app.UseMiddleware<ExceptionHandlingMiddleware>()`
+#### DependencyInjection.cs (EMS_Application)
+Registers: DepartmentService, EmployeeService, and all validators via `AddValidatorsFromAssembly(Assembly.GetExecutingAssembly())`
 
-### Target Application Layer Structure After M2:
-```
-EMS_Application/
-├── DTO/
-│   ├── Department/
-│   │   ├── CreateDepartmentRequest.cs     ← EXISTS
-│   │   ├── UpdateDepartmentRequest.cs     ← EXISTS
-│   │   └── DepartmentResponse.cs          ← EXISTS
-│   ├── Employee/
-│   │   ├── CreateEmployeeRequest.cs       ← EXISTS
-│   │   ├── UpdateEmployeeRequest.cs       ← EXISTS
-│   │   └── EmployeeResponse.cs            ← EXISTS
-│   └── Common/
-│       └── ApiResponse.cs                 ← TO CREATE
-├── Mapping/
-│   ├── DepartmentMapping.cs               ← EXISTS
-│   └── EmployeeMapping.cs                 ← EXISTS
-├── Validators/
-│   ├── CreateDepartmentValidator.cs       ← TO CREATE
-│   ├── UpdateDepartmentValidator.cs       ← TO CREATE
-│   ├── CreateEmployeeValidator.cs         ← TO CREATE
-│   └── UpdateEmployeeValidator.cs         ← TO CREATE
-├── Exceptions/
-│   ├── NotFoundException.cs               ← TO CREATE
-│   ├── BadRequestException.cs             ← TO CREATE
-│   └── ValidationException.cs             ← TO CREATE
-├── Interfaces/                            ← EXISTS (no changes)
-├── Services/                              ← EXISTS (needs NotFoundException + validation)
-└── DependencyInjection.cs                 ← EXISTS (needs validator registration)
-```
+---
 
-### Rules for Milestone 2
+## Rules for Milestone 2
 - NO AutoMapper — manual mapping only (already done)
 - Controllers must be thin — no try-catch after middleware
 - Validation happens in the service layer (inject IValidator), not controller
 - Middleware handles ALL exceptions
-- Validation calls custom ValidationException with error list
+- Validation calls custom ValidationException with error dictionary
 
 ---
 

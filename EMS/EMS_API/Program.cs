@@ -1,3 +1,4 @@
+using EMS_API.Middleware;
 using EMS_Application;
 using EMS_Infrastructure;
 
@@ -17,6 +18,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseHttpsRedirection();
 app.UseAuthorization();
 app.MapControllers();

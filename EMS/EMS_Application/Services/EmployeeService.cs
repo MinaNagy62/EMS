@@ -1,4 +1,5 @@
 using EMS_Application.DTO.Employee;
+using EMS_Application.Exceptions;
 using EMS_Application.Interfaces;
 using EMS_Application.Interfaces.Employees;
 using EMS_Application.Mapping;
@@ -23,13 +24,16 @@ public class EmployeeService : IEmployeeService
         return employees.ToResponse();
     }
 
-    public async Task<EmployeeResponse?> GetEmployeeByIdAsync(int id)
+    public async Task<EmployeeResponse> GetEmployeeByIdAsync(int id)
     {
         var employee = await _unitOfWork.Employees.FindAsync(
             e => e.Id == id && e.IsActive,
             e => e.Department);
 
-        return employee?.ToResponse();
+        if (employee is null)
+            throw new NotFoundException(nameof(employee), id);
+
+        return employee.ToResponse();
     }
 
     public async Task<EmployeeResponse> CreateEmployeeAsync(CreateEmployeeRequest request)
@@ -48,7 +52,7 @@ public class EmployeeService : IEmployeeService
         var existing = await _unitOfWork.Employees.FindAsync(e => e.Id == id && e.IsActive);
 
         if (existing is null)
-            throw new KeyNotFoundException($"Employee with ID {id} not found.");
+            throw new NotFoundException(nameof(existing), id);
 
         existing.ApplyUpdate(request);
 
@@ -63,7 +67,7 @@ public class EmployeeService : IEmployeeService
         var existing = await _unitOfWork.Employees.FindAsync(e => e.Id == id && e.IsActive);
 
         if (existing is null)
-            throw new KeyNotFoundException($"Employee with ID {id} not found.");
+            throw new NotFoundException(nameof(existing), id);
 
         existing.IsActive = false;
         existing.UpdatedAt = DateTime.UtcNow;

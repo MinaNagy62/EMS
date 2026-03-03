@@ -1,4 +1,5 @@
 using EMS_Application.DTO.Department;
+using EMS_Application.Exceptions;
 using EMS_Application.Interfaces;
 using EMS_Application.Interfaces.Departments;
 using EMS_Application.Mapping;
@@ -20,12 +21,15 @@ public class DepartmentService : IDepartmentService
         return departments.ToResponse();
     }
 
-    public async Task<DepartmentResponse?> GetDepartmentByIdAsync(int id)
+    public async Task<DepartmentResponse> GetDepartmentByIdAsync(int id)
     {
         var department = await _unitOfWork.Departments.FindAsync(
             d => d.Id == id && d.IsActive);
 
-        return department?.ToResponse();
+        if (department is null)
+            throw new NotFoundException(nameof(department), id);
+
+        return department.ToResponse();
     }
 
     public async Task<DepartmentResponse> CreateDepartmentAsync(CreateDepartmentRequest request)
@@ -44,7 +48,7 @@ public class DepartmentService : IDepartmentService
         var existing = await _unitOfWork.Departments.FindAsync(d => d.Id == id && d.IsActive);
 
         if (existing is null)
-            throw new KeyNotFoundException($"Department with ID {id} not found.");
+            throw new NotFoundException(nameof(existing), id);
 
         existing.ApplyUpdate(request);
 
@@ -59,7 +63,7 @@ public class DepartmentService : IDepartmentService
         var existing = await _unitOfWork.Departments.FindAsync(d => d.Id == id && d.IsActive);
 
         if (existing is null)
-            throw new KeyNotFoundException($"Department with ID {id} not found.");
+            throw new NotFoundException(nameof(existing), id);
 
         existing.IsActive = false;
         existing.UpdatedAt = DateTime.UtcNow;
