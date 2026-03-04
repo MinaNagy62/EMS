@@ -1,5 +1,8 @@
+using EMS_Application.Common;
 using EMS_Application.Interfaces;
+using EMS_Application.Interfaces.AppUsers;
 using EMS_Infrastructure.Data;
+using EMS_Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -13,7 +16,10 @@ public static class DependencyInjection
         services.AddDbContext<AppDbContext>(options =>
             options.UseSqlServer(configuration.GetConnectionString("DefaultConnection")));
 
+        services.Configure<JwtSettings>(configuration.GetSection("JwtSettings"));
+
         services.AddScoped<IUnitOfWork, UnitOfWork.UnitOfWork>();
+        services.AddScoped<IJwtTokenService, JwtTokenService>();
 
         return services;
     }

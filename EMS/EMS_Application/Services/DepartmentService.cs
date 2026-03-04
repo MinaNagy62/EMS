@@ -1,3 +1,4 @@
+using EMS_Application.Common;
 using EMS_Application.DTO.Department;
 using EMS_Application.Exceptions;
 using EMS_Application.Interfaces;
@@ -45,13 +46,7 @@ public class DepartmentService : IDepartmentService
         var validationResult = await _createValidator.ValidateAsync(request);
 
         if (!validationResult.IsValid)
-        {
-            var errors = validationResult.Errors
-                .GroupBy(e => e.PropertyName)
-                .ToDictionary(g => g.Key, g => g.Select(e => e.ErrorMessage).ToArray());
-
-            throw new Exceptions.ValidationException(errors);
-        }
+            throw new Exceptions.ValidationException(validationResult.ToErrorDictionary());
 
         var department = request.ToEntity();
         department.CreatedAt = DateTime.UtcNow;
@@ -67,13 +62,7 @@ public class DepartmentService : IDepartmentService
         var validationResult = await _updateValidator.ValidateAsync(request);
 
         if (!validationResult.IsValid)
-        {
-            var errors = validationResult.Errors
-                .GroupBy(e => e.PropertyName)
-                .ToDictionary(g => g.Key, g => g.Select(e => e.ErrorMessage).ToArray());
-
-            throw new Exceptions.ValidationException(errors);
-        }
+            throw new Exceptions.ValidationException(validationResult.ToErrorDictionary());
 
         var existing = await _unitOfWork.Departments.FindAsync(d => d.Id == id && d.IsActive);
 

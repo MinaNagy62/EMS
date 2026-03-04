@@ -1,3 +1,4 @@
+using EMS_Application.Common;
 using EMS_Application.DTO.Employee;
 using EMS_Application.Exceptions;
 using EMS_Application.Interfaces;
@@ -49,13 +50,7 @@ public class EmployeeService : IEmployeeService
         var validationResult = await _createValidator.ValidateAsync(request);
 
         if (!validationResult.IsValid)
-        {
-            var errors = validationResult.Errors
-                .GroupBy(e => e.PropertyName)
-                .ToDictionary(g => g.Key, g => g.Select(e => e.ErrorMessage).ToArray());
-
-            throw new Exceptions.ValidationException(errors);
-        }
+            throw new Exceptions.ValidationException(validationResult.ToErrorDictionary());
 
         var employee = request.ToEntity();
         employee.CreatedAt = DateTime.UtcNow;
@@ -71,13 +66,7 @@ public class EmployeeService : IEmployeeService
         var validationResult = await _updateValidator.ValidateAsync(request);
 
         if (!validationResult.IsValid)
-        {
-            var errors = validationResult.Errors
-                .GroupBy(e => e.PropertyName)
-                .ToDictionary(g => g.Key, g => g.Select(e => e.ErrorMessage).ToArray());
-
-            throw new Exceptions.ValidationException(errors);
-        }
+            throw new Exceptions.ValidationException(validationResult.ToErrorDictionary());
 
         var existing = await _unitOfWork.Employees.FindAsync(e => e.Id == id && e.IsActive);
 

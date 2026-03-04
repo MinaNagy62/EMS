@@ -3,7 +3,8 @@
     "allow": [
       "Bash(dotnet add:*)",
       "Bash(dotnet build:*)",
-      "Bash(gh auth:*)"
+      "Bash(gh auth:*)",
+      "Bash(xargs grep:*)"
     ]
   }
 }

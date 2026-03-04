@@ -11,15 +11,17 @@
 | Skill Area | Status | Notes |
 |---|---|---|
 | Project Structure & Clean Architecture | Reviewed M1 | Good structure, improved in M2 (Entities folder, Enum folder) |
-| Entity Design & EF Core (Fluent API) | Reviewed M1 | Solid |
-| Repository & Unit of Work Pattern | Reviewed M1 | Solid implementation with filter+includes |
+| Entity Design & EF Core (Fluent API) | Reviewed M1+M3 | Solid. AppUser entity well-designed with refresh token support |
+| Repository & Unit of Work Pattern | Reviewed M1+M3 | Solid. Extended with AppUserRepository and lazy init in UoW |
 | DTOs & Manual Mapping | Done M2 | DTOs + mapping done, ApplyUpdate pattern is good |
-| Validation (FluentValidation) | Done M2 | 4 validators created, all rules correct. One bug: uppercase null-safety (pending fix) |
+| Validation (FluentValidation) | Done M2+M3 | 6 validators total. Fixed null-safety with Matches regex. Added auth validators |
 | Custom Exceptions | Done M2 | NotFoundException, BadRequestException, ValidationException — clean implementations |
 | ApiResponse<T> Wrapper | Done M2 | Factory methods, fixed null-safety on Message property after review |
-| Error Handling & Middleware | Not Started | Pending — last piece of M2 |
-| Authentication (JWT) | Not Started | - |
-| Authorization (Role & Policy based) | Not Started | - |
+| Error Handling & Middleware | Done M2 | Global Exception Handling Middleware with switch expression, camelCase JSON |
+| ValidationExtensions Helper | Done M3 | ToErrorDictionary() extension extracted from duplicated code across 6 service methods |
+| Options Pattern | Done M3 | JwtSettings class with IOptions<JwtSettings> — used in JwtTokenService and AuthService |
+| Authentication (JWT) | In Progress M3 | JwtTokenService done, AuthService done with all 3 flows. Still needs AuthController + middleware config |
+| Authorization (Role & Policy based) | Not Started | Pending in M3 |
 | Pagination, Filtering, Sorting | Not Started | - |
 | Caching (In-Memory & Distributed) | Not Started | - |
 | Background Jobs (Hangfire/Hosted Services) | Not Started | - |
@@ -69,7 +71,7 @@
 
 #### Issues NOT Fixed (carried to M2)
 - Unused `using System.Linq.Expressions` in IDepartmentService — FIXED in M2 (now uses DTO imports)
-- Controllers still have try-catch — will be fixed when middleware is added
+- Controllers still have try-catch — FIXED in M2 (middleware added)
 
 ### Milestone 2 Progress Reviews
 
@@ -119,7 +121,7 @@ Strengths in this batch:
 - Responded to ApiResponse null-safety feedback immediately
 
 Issues found:
-- `.Must(code => code == code.ToUpper())` — NullReferenceException if Code is null (PENDING FIX)
+- `.Must(code => code == code.ToUpper())` — NullReferenceException if Code is null (FIXED with Matches regex)
 - Create and Update validators are 100% duplicated (acceptable since DTOs are different types)
 
 #### M2 Review #3 (Final) — 2026-03-04 — COMPLETED
@@ -133,25 +135,92 @@ All remaining items implemented:
 5. Middleware registered in Program.cs
 6. Validators injected in BOTH services (was missing from DepartmentService — caught in review, fixed)
 
-Bugs found during final review (both fixed):
-- `nameof(department)` / `nameof(existing)` producing wrong entity names in NotFoundException — fixed to string literals
-- DepartmentService not injecting/using validators despite validators existing — fixed
+### Milestone 3 Progress Reviews
 
-Minor carry-forward items (not blocking):
-- Validation GroupBy/ToDictionary logic duplicated 4x — extract helper eventually
-- `Exceptions.ValidationException` fully qualified (namespace conflict) — using alias would be cleaner
-- `null!` in delete responses — works but is a code smell
+#### M3 Review #1 — 2026-03-04 (Foundation — Entity, Enum, Config, Migration, DTOs)
+**Status: Foundation laid (~15%)**
+
+What was completed:
+1. AppUser entity with all required fields (PasswordHash, RefreshToken, RefreshTokenExpiryDate, Role, IsActive, CreatedAt)
+2. Role enum (Admin=1, HR=2, Employee=3)
+3. AppUserConfiguration — Fluent API with email unique index
+4. AppDbContext updated with DbSet<AppUser>
+5. Migration created (20260304092250_A_E_AppUsers)
+6. IAppUserRepository interface extending IGenericRepository
+
+Observations:
+- Named `RefreshTokenExpiryDate` instead of spec's `RefreshTokenExpiryTime` — acceptable, no functional impact
+- Foundation follows established patterns from M1/M2
+
+#### M3 Review #2 — 2026-03-04 (Auth DTOs, IAuthService, BCrypt, JWT Settings)
+**Status: ~30%**
+
+What was completed:
+1. Auth DTOs: RegisterRequest, LoginRequest, AuthResponse — all correct
+2. IAuthService interface with 3 proper methods (RegisterAsync, LoginAsync, RefreshTokenAsync)
+3. Correctly removed the initial IAppUserService (was returning raw entities — DTO rule violation)
+4. BCrypt.Net-Next package installed
+5. JWT settings added to appsettings.json (all 5 values)
+
+Minor naming nits (not blocking):
+- DTOs initially in `DTO/AppUser/` folder instead of `DTO/Auth/` — later corrected
+- `ExpireAt` instead of `ExpiresAt` — later corrected
+
+#### M3 Review #3 — 2026-03-04 (Core Implementation Sprint)
+**Status: ~70% — First pass score: 7.5/10**
+
+What was completed:
+1. AppUserRepository — follows established pattern
+2. UnitOfWork updated with lazy AppUsers initialization
+3. IUnitOfWork updated with IAppUserRepository AppUsers
+4. IJwtTokenService interface — `(string Token, DateTime ExpiresAt)` tuple return
+5. JwtTokenService implementation — HS256, claims (Sub, Email, Role, Jti), IOptions<JwtSettings>, RandomNumberGenerator
+6. AuthService implementation — all 3 flows (Register, Login, Refresh)
+7. Auth validators — RegisterRequestValidator, LoginRequestValidator
+8. DI registrations — AuthService in Application, JwtTokenService in Infrastructure
+
+Issues found (3 total):
+1. **Hardcoded magic numbers** — `AddDays(7)` and `AddMinutes(30)` instead of reading from JwtSettings config
+2. **User enumeration vulnerability** — separate error messages for "email not found" vs "wrong password" let attackers discover registered emails
+3. **Validation GroupBy/ToDictionary duplicated** — same code in 6 places across services (carry-forward from M2)
+
+#### M3 Review #4 — 2026-03-04 (Bug fixes)
+**Status: ~70% — Revised score: 8.5/10**
+
+All 3 issues fixed:
+1. **Options pattern** — Created `JwtSettings` class, injected `IOptions<JwtSettings>` into both AuthService and JwtTokenService. No more hardcoded values. `GenerateAccessToken` now returns tuple `(string Token, DateTime ExpiresAt)` so expiry comes from same source as actual token.
+2. **User enumeration fixed** — Login now combines email lookup + password check into single error: `"Invalid email or password."` — attacker can't distinguish
+3. **ValidationExtensions.ToErrorDictionary()** — Extracted extension method, now used in all 6 validation points across DepartmentService, EmployeeService, and AuthService
+
+Also fixed:
+- Department validators: `.Must()` replaced with `.Matches(@"^[A-Z0-9]+$")` — null-safe (M2 carry-forward finally resolved)
+- Both DepartmentService and EmployeeService now use `ToErrorDictionary()` too
+
+#### What is still pending to complete M3:
+1. AuthController (POST /api/auth/register, POST /api/auth/login, POST /api/auth/refresh)
+2. RefreshTokenRequest DTO (for refresh endpoint body)
+3. JWT authentication configuration in Program.cs (AddAuthentication, AddJwtBearer)
+4. `app.UseAuthentication()` before `app.UseAuthorization()` in pipeline
+5. Install Microsoft.AspNetCore.Authentication.JwtBearer in EMS_API
+6. `[Authorize]` on DepartmentController and EmployeeController
+7. Role-based authorization policies
+8. Current user service (optional for M3)
 
 ## Strengths Identified (Across Milestones)
-1. Learns from feedback — every M1 issue was addressed, ApiResponse fix applied immediately
+1. Learns from feedback — every issue raised has been addressed
 2. Good instinct for code organization (restructured Domain layer on own initiative)
 3. Understands navigation property loading (includes Department in Employee queries)
 4. Clean mapping approach with extension methods
 5. ApplyUpdate pattern shows independent thinking
 6. Exception design follows conventions (entityName+key pattern, field-level validation errors)
 7. Validator rules are thorough — didn't miss any property
+8. Options pattern adopted naturally — JwtSettings with IOptions<T>
+9. Tuple return from JwtTokenService — ties ExpiresAt to actual token expiry (no drift)
+10. Security awareness — fixed user enumeration after being shown the issue
+11. Responsive to feedback — fixes issues in same session, doesn't push back
 
 ## Weaknesses / Areas to Watch
-1. Attention to detail — null-safety bug in uppercase validator (missed edge case)
-2. Still using KeyNotFoundException instead of custom exceptions (pending fix)
-3. Controllers still have try-catch pattern (pending middleware)
+1. Attention to detail on first pass — misses edge cases (null-safety, hardcoded values, security leaks)
+2. Tends to hardcode values before being reminded to use config/options
+3. Needs prompting to think about security implications (user enumeration wasn't caught independently)
+4. Code duplication builds up until called out (validation logic was copied 6 times before extraction)

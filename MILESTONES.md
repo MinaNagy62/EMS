@@ -36,15 +36,15 @@ Small in scope, but deep in patterns and best practices.
 - [x] Manual mapping with extension methods (ApplyUpdate pattern)
 - [x] Service interfaces updated to use DTOs
 - [x] Services refactored to use mapping
-- [x] Controllers updated to use DTOs
+- [x] Controllers updated to use DTOs, thin (no try-catch)
 - [x] Employee queries include Department navigation (for DepartmentName)
 - [x] Domain restructured (Entities/ folder, Enum/ folder)
-- [x] All M1 carry-forward fixes applied
 - [x] Custom Exceptions (NotFoundException, BadRequestException, ValidationException)
 - [x] ApiResponse<T> wrapper with factory methods
-- [x] FluentValidation validators (4 files) with correct rules
+- [x] FluentValidation validators (4 files) with correct rules (Matches regex for null-safe uppercase)
 - [x] Validators registered via AddValidatorsFromAssembly
-- [x] Validators injected and used in both services
+- [x] Validators injected and used in both services (service-layer validation)
+- [x] ValidationExtensions.ToErrorDictionary() helper (extracted from duplicated code)
 - [x] Global Exception Handling Middleware (404/422/400/500)
 - [x] Controllers cleaned — no try-catch, ApiResponse<T> wrapping
 - [x] Middleware registered in Program.cs
@@ -52,9 +52,9 @@ Small in scope, but deep in patterns and best practices.
 **Review scores:**
 - M2 Review #1 (DTOs & Mapping): Good
 - M2 Review #2 (Exceptions, ApiResponse, Validators): 8/10
-- M2 Review #3 (Final — Middleware, cleanup): 8.5/10 — COMPLETED
+- M2 Review #3 (Final — Middleware, cleanup): 8.5/10
 
-**Interview topics this covers:**
+**Interview topics covered:**
 - "Why use DTOs?"
 - "How do you handle validation in .NET?"
 - "How do you handle errors globally?"
@@ -62,28 +62,67 @@ Small in scope, but deep in patterns and best practices.
 - "Why manual mapping over AutoMapper?"
 - "Where should validation happen?"
 
-**Deliverable:** Employee + Department CRUD with proper DTOs, validation, error responses.
-
 ---
 
-## Milestone 3: Authentication & Authorization — NOT STARTED
+## Milestone 3: Authentication & Authorization — IN PROGRESS (~70%)
 **Challenge:** Secure your API with JWT and implement role-based access.
 
-**You will cover:**
-1. Identity setup (or custom user entity)
-2. JWT token generation & validation
-3. Refresh tokens
-4. Register / Login endpoints
-5. Role-based authorization (Admin, HR, Employee)
-6. Policy-based authorization
-7. Protecting endpoints with `[Authorize]`
-8. Current user service (extracting claims from token)
+### What's DONE:
+- [x] AppUser entity (Id, FirstName, LastName, Email, PasswordHash, Role, RefreshToken, RefreshTokenExpiryDate, IsActive, CreatedAt)
+- [x] Role enum (Admin=1, HR=2, Employee=3)
+- [x] AppUserConfiguration (Fluent API: HasKey, max lengths, unique email index, PasswordHash required)
+- [x] AppDbContext updated with DbSet<AppUser>
+- [x] Migration created (20260304092250_A_E_AppUsers)
+- [x] AppUserRepository extending GenericRepository<AppUser>
+- [x] IUnitOfWork + UnitOfWork updated with AppUsers (lazy init)
+- [x] Auth DTOs: RegisterRequest, LoginRequest, AuthResponse (Token, RefreshToken, ExpiresAt, Email, Role)
+- [x] IAuthService interface (RegisterAsync, LoginAsync, RefreshTokenAsync)
+- [x] AuthService implementation with all 3 flows:
+  - Register: validate → check email unique → BCrypt hash → generate tokens → save refresh token → return
+  - Login: validate → find user → combined email/password error (prevents user enumeration) → generate tokens → save → return
+  - Refresh: find by token → check expiry → rotate tokens → save → return
+- [x] IJwtTokenService interface — returns `(string Token, DateTime ExpiresAt)` tuple
+- [x] JwtTokenService implementation — HS256, claims (Sub, Email, Role, Jti), IOptions<JwtSettings>, RandomNumberGenerator for refresh tokens
+- [x] JwtSettings class (Options pattern) — SecretKey, Issuer, Audience, AccessTokenExpirationMinutes, RefreshTokenExpirationDays
+- [x] JWT settings in appsettings.json, registered via services.Configure<JwtSettings>()
+- [x] Auth validators: RegisterRequestValidator (FirstName/LastName 2-50, Email valid, Password min 8), LoginRequestValidator (Email valid, Password required)
+- [x] BCrypt.Net-Next package installed
+- [x] Microsoft.AspNetCore.Authentication.JwtBearer package installed
+- [x] Microsoft.Extensions.Options package installed
+- [x] DI registered: IAuthService→AuthService (Application), IJwtTokenService→JwtTokenService (Infrastructure)
+- [x] ValidationExtensions.ToErrorDictionary() used across all services
+
+### What's REMAINING:
+- [ ] AuthController (POST /api/auth/register, POST /api/auth/login, POST /api/auth/refresh)
+- [ ] RefreshTokenRequest DTO (for refresh endpoint body)
+- [ ] JWT authentication configuration in Program.cs (AddAuthentication, AddJwtBearer with token validation)
+- [ ] `app.UseAuthentication()` before `app.UseAuthorization()` in pipeline
+- [ ] `[Authorize]` on DepartmentController and EmployeeController (class level)
+- [ ] AuthController stays anonymous (no [Authorize])
+- [ ] Role-based authorization (Admin, HR, Employee policies)
+- [ ] Current user service (extract claims from token) — optional
+
+### Review scores so far:
+- M3 Review #1 (Foundation): Good — clean entity/enum/config
+- M3 Review #2 (DTOs, Interface, Config): Good — minor naming nits only
+- M3 Review #3 (Core Implementation): 7.5/10 → fixed to 8.5/10 (3 issues found and fixed: hardcoded values, user enumeration, validation duplication)
+
+### Security decisions:
+- Login: same error for wrong email AND wrong password (prevents user enumeration)
+- Refresh token rotation on every refresh (old token invalidated)
+- 500 errors never leak internal details
+- BCrypt for password hashing (intentionally slow, salted)
+- No hardcoded expiry values — all from JwtSettings via Options pattern
 
 **Interview topics this covers:**
 - "Explain JWT authentication flow"
 - "Difference between Authentication and Authorization"
 - "How do refresh tokens work?"
 - "Role-based vs Policy-based authorization"
+- "Why BCrypt over SHA256?"
+- "What is user enumeration and how do you prevent it?"
+- "What is the Options pattern?"
+- "What is token rotation?"
 
 **Deliverable:** Secured API — only authenticated users access resources, roles control actions.
 

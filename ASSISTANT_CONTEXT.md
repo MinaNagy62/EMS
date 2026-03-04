@@ -13,7 +13,7 @@ I am a .NET developer with 3 years of experience. I'm building this project to m
 
 ---
 
-## Current Project Structure (ACTUAL — as of M2 complete)
+## Current Project Structure (ACTUAL — as of M3 in progress)
 ```
 EMS/
 ├── EMS_API/
@@ -21,25 +21,32 @@ EMS/
 │   │   ├── DepartmentController.cs
 │   │   └── EmployeeController.cs
 │   ├── Middleware/
-│   │   └── ExceptionHandlingMiddleware.cs    ← NEW in M2
+│   │   └── ExceptionHandlingMiddleware.cs
 │   ├── Program.cs
+│   ├── appsettings.json
 │   └── EMS_API.csproj
 ├── EMS_Application/
 │   ├── Common/
-│   │   └── ApiResponse.cs                     ← NEW in M2
+│   │   ├── ApiResponse.cs
+│   │   ├── JwtSettings.cs                        ← NEW in M3
+│   │   └── ValidationExtensions.cs               ← NEW in M3
 │   ├── DTO/
 │   │   ├── Department/
 │   │   │   ├── CreateDepartmentRequest.cs
 │   │   │   ├── UpdateDepartmentRequest.cs
 │   │   │   └── DepartmentResponse.cs
-│   │   └── Employee/
-│   │       ├── CreateEmployeeRequest.cs
-│   │       ├── UpdateEmployeeRequest.cs
-│   │       └── EmployeeResponse.cs
+│   │   ├── Employee/
+│   │   │   ├── CreateEmployeeRequest.cs
+│   │   │   ├── UpdateEmployeeRequest.cs
+│   │   │   └── EmployeeResponse.cs
+│   │   └── Auth/
+│   │       ├── AuthResponse.cs                    ← NEW in M3
+│   │       ├── LoginRequest.cs                    ← NEW in M3
+│   │       └── RegisterRequest.cs                 ← NEW in M3
 │   ├── Exceptions/
-│   │   ├── BadRequestException.cs             ← NEW in M2
-│   │   ├── NotFoundException.cs               ← NEW in M2
-│   │   └── ValidationException.cs             ← NEW in M2
+│   │   ├── BadRequestException.cs
+│   │   ├── NotFoundException.cs
+│   │   └── ValidationException.cs
 │   ├── Interfaces/
 │   │   ├── Departments/
 │   │   │   ├── IDepartmentService.cs
@@ -47,6 +54,10 @@ EMS/
 │   │   ├── Employees/
 │   │   │   ├── IEmployeeService.cs
 │   │   │   └── IEmployeeRepository.cs
+│   │   ├── AppUsers/
+│   │   │   ├── IAuthService.cs                    ← NEW in M3
+│   │   │   ├── IJwtTokenService.cs                ← NEW in M3
+│   │   │   └── IAppUserRepository.cs              ← NEW in M3
 │   │   ├── IGenericRepository.cs
 │   │   └── IUnitOfWork.cs
 │   ├── Mapping/
@@ -54,31 +65,40 @@ EMS/
 │   │   └── EmployeeMapping.cs
 │   ├── Services/
 │   │   ├── DepartmentService.cs
-│   │   └── EmployeeService.cs
+│   │   ├── EmployeeService.cs
+│   │   └── AuthService.cs                         ← NEW in M3
 │   ├── Validators/
-│   │   ├── CreateDepartmentValidator.cs       ← NEW in M2
-│   │   ├── UpdateDepartmentValidator.cs       ← NEW in M2
-│   │   ├── CreateEmployeeValidator.cs         ← NEW in M2
-│   │   └── UpdateEmployeeValidator.cs         ← NEW in M2
+│   │   ├── CreateDepartmentValidator.cs
+│   │   ├── UpdateDepartmentValidator.cs
+│   │   ├── CreateEmployeeValidator.cs
+│   │   ├── UpdateEmployeeValidator.cs
+│   │   ├── RegisterRequestValidator.cs            ← NEW in M3
+│   │   └── LoginRequestValidator.cs               ← NEW in M3
 │   ├── DependencyInjection.cs
 │   └── EMS_Application.csproj
 ├── EMS_Domain/
 │   ├── Entities/
 │   │   ├── Department.cs
-│   │   └── Employee.cs
+│   │   ├── Employee.cs
+│   │   └── AppUser.cs                             ← NEW in M3
 │   ├── Enum/
-│   │   └── Gender.cs
+│   │   ├── Gender.cs
+│   │   └── Role.cs                                ← NEW in M3
 │   └── EMS_Domain.csproj
 └── EMS_Infrastructure/
     ├── Data/
     │   ├── AppDbContext.cs
     │   └── Configurations/
     │       ├── DepartmentConfiguration.cs
-    │       └── EmployeeConfiguration.cs
+    │       ├── EmployeeConfiguration.cs
+    │       └── AppUserConfiguration.cs             ← NEW in M3
     ├── Repositories/
     │   ├── GenericRepository.cs
     │   ├── DepartmentRepository.cs
-    │   └── EmployeeRepository.cs
+    │   ├── EmployeeRepository.cs
+    │   └── AppUserRepository.cs                    ← NEW in M3
+    ├── Services/
+    │   └── JwtTokenService.cs                      ← NEW in M3
     ├── UnitOfWork/
     │   └── UnitOfWork.cs
     ├── Migrations/
@@ -89,9 +109,9 @@ EMS/
 **Dependency Rule:** Domain depends on nothing. Application depends on Domain. Infrastructure depends on Application. API depends on all.
 
 **NuGet Packages installed:**
-- EMS_API: Microsoft.AspNetCore.OpenApi, Microsoft.EntityFrameworkCore.Design, Swashbuckle.AspNetCore
-- EMS_Application: Microsoft.Extensions.DependencyInjection.Abstractions, FluentValidation.DependencyInjectionExtensions (12.1.1)
-- EMS_Infrastructure: Microsoft.EntityFrameworkCore.SqlServer, Microsoft.EntityFrameworkCore.Tools
+- EMS_API: Microsoft.AspNetCore.OpenApi (10.0.2), Microsoft.EntityFrameworkCore.Design (10.0.3), Swashbuckle.AspNetCore (10.1.4)
+- EMS_Application: Microsoft.Extensions.DependencyInjection.Abstractions (10.0.3), FluentValidation.DependencyInjectionExtensions (12.1.1), BCrypt.Net-Next (4.1.0), Microsoft.Extensions.Options (10.0.3)
+- EMS_Infrastructure: Microsoft.EntityFrameworkCore.SqlServer (10.0.3), Microsoft.EntityFrameworkCore.Tools (10.0.3), Microsoft.AspNetCore.Authentication.JwtBearer (10.0.3)
 - EMS_Domain: none
 
 ---
@@ -129,6 +149,24 @@ EMS/
 | CreatedAt | DateTime | Set on creation |
 | UpdatedAt | DateTime? | Set on update |
 
+### AppUser (EMS_Domain/Entities/AppUser.cs) — NEW in M3
+| Property | Type | Notes |
+|---|---|---|
+| Id | int | Primary key |
+| FirstName | string | Required, max 50 |
+| LastName | string | Required, max 50 |
+| Email | string | Required, unique |
+| PasswordHash | string | Required, BCrypt hash |
+| Role | Role enum | Default: Employee |
+| RefreshToken | string? | Stored for refresh flow |
+| RefreshTokenExpiryDate | DateTime? | 7 days from generation |
+| IsActive | bool | Default true |
+| CreatedAt | DateTime | Set on creation |
+
+### Enums
+- **Gender** (Domain/Enum/Gender.cs): Male=1, Female=2
+- **Role** (Domain/Enum/Role.cs): Admin=1, HR=2, Employee=3
+
 ---
 
 ## All 6 Milestones Overview
@@ -137,7 +175,7 @@ EMS/
 |---|---|---|
 | 1 | Project Setup & Clean Architecture | COMPLETED (Score: 7.5/10) |
 | 2 | DTOs, Validation & Error Handling | COMPLETED (Score: 8.5/10) |
-| 3 | Authentication & Authorization | Not Started |
+| 3 | Authentication & Authorization | IN PROGRESS |
 | 4 | Advanced Querying & Performance | Not Started |
 | 5 | CQRS with MediatR | Not Started |
 | 6 | Background Jobs, Logging & Polish | Not Started |
@@ -208,6 +246,15 @@ public class ApiResponse<T>
 }
 ```
 
+#### ValidationExtensions (EMS_Application/Common/ValidationExtensions.cs)
+```csharp
+public static class ValidationExtensions
+{
+    public static IDictionary<string, string[]> ToErrorDictionary(this ValidationResult result)
+}
+```
+Used across all services to convert FluentValidation errors into the dictionary format for ValidationException.
+
 #### Validators (EMS_Application/Validators/)
 **Department validators (Create + Update):**
 - Name: NotEmpty, Length(2, 100)
@@ -226,17 +273,76 @@ public class ApiResponse<T>
 - JobTitle: NotEmpty, Length(2, 100)
 - DepartmentId: GreaterThan(0)
 
+#### Middleware (EMS_API/Middleware/ExceptionHandlingMiddleware.cs)
+Catches all exceptions, maps to HTTP status codes, returns `ApiResponse<object>.FailResponse(...)` as JSON with camelCase. Uses switch expression with pattern matching. 500 errors return generic message (no detail leak).
+
 #### DependencyInjection.cs (EMS_Application)
-Registers: DepartmentService, EmployeeService, and all validators via `AddValidatorsFromAssembly(Assembly.GetExecutingAssembly())`
+Registers: DepartmentService, EmployeeService, AuthService, and all validators via `AddValidatorsFromAssembly(Assembly.GetExecutingAssembly())`
+
+#### DependencyInjection.cs (EMS_Infrastructure)
+Registers: AppDbContext (SQL Server), JwtSettings (Options pattern), IUnitOfWork, IJwtTokenService
 
 ---
 
-## Rules for Milestone 2
-- NO AutoMapper — manual mapping only (already done)
-- Controllers must be thin — no try-catch after middleware
+## Milestone 3 — IN PROGRESS (Authentication & Authorization)
+
+### What's DONE:
+- [x] AppUser entity with all properties (Id, FirstName, LastName, Email, PasswordHash, Role, RefreshToken, RefreshTokenExpiryDate, IsActive, CreatedAt)
+- [x] Role enum (Admin=1, HR=2, Employee=3)
+- [x] AppUserConfiguration (Fluent API: HasKey, max lengths, unique email index, PasswordHash required)
+- [x] AppUserRepository extending GenericRepository<AppUser>
+- [x] IAppUserRepository interface
+- [x] AppDbContext updated with DbSet<AppUser>
+- [x] IUnitOfWork updated with AppUsers property
+- [x] UnitOfWork updated with lazy AppUsers initialization
+- [x] Migration created (20260304092250_A_E_AppUsers)
+- [x] Auth DTOs: AuthResponse (Token, RefreshToken, ExpiresAt, Email, Role), LoginRequest (Email, Password), RegisterRequest (FirstName, LastName, Email, Password)
+- [x] IJwtTokenService interface — returns `(string Token, DateTime ExpiresAt)` tuple from GenerateAccessToken
+- [x] JwtTokenService implementation — HS256 signing, claims (Sub, Email, Role, Jti), uses IOptions<JwtSettings>, cryptographic refresh token with RandomNumberGenerator
+- [x] JwtSettings class (Options pattern) — SecretKey, Issuer, Audience, AccessTokenExpirationMinutes, RefreshTokenExpirationDays
+- [x] JwtSettings configured in appsettings.json and registered via services.Configure<JwtSettings>()
+- [x] IAuthService interface — RegisterAsync, LoginAsync, RefreshTokenAsync
+- [x] AuthService implementation:
+  - RegisterAsync: validate → check email unique → BCrypt hash password → generate tokens → save refresh token → return AuthResponse
+  - LoginAsync: validate → find user → verify password → generic error message for both wrong email/password (prevents user enumeration) → generate tokens → save → return
+  - RefreshTokenAsync: find by refresh token → check not expired → generate new pair (rotation) → save → return
+- [x] Auth validators: RegisterRequestValidator (FirstName/LastName 2-50, Email valid, Password min 8), LoginRequestValidator (Email valid, Password required)
+- [x] DI registered: IAuthService→AuthService, IJwtTokenService→JwtTokenService
+- [x] BCrypt.Net-Next package installed for password hashing
+- [x] Microsoft.AspNetCore.Authentication.JwtBearer package installed
+- [x] Microsoft.Extensions.Options package installed
+
+### What's REMAINING for M3:
+- [ ] AuthController (POST /api/auth/register, POST /api/auth/login, POST /api/auth/refresh)
+- [ ] JWT authentication configuration in Program.cs (AddAuthentication, AddJwtBearer with token validation parameters)
+- [ ] [Authorize] attributes on Department and Employee controllers
+- [ ] Role-based authorization ([Authorize(Roles = "Admin")] on specific endpoints)
+- [ ] Test all auth endpoints via Swagger
+
+### Auth Flow:
+```
+Register → POST /api/auth/register → returns AccessToken + RefreshToken
+Login    → POST /api/auth/login    → returns AccessToken + RefreshToken
+Refresh  → POST /api/auth/refresh  → returns new AccessToken + RefreshToken
+```
+
+### Security decisions made:
+- Login returns same error ("Invalid email or password.") for both wrong email and wrong password (prevents user enumeration)
+- Refresh tokens are rotated on every refresh (old token invalidated)
+- 500 errors never leak internal details
+- BCrypt for password hashing (intentionally slow, salted)
+
+---
+
+## Rules for All Milestones
+- NO AutoMapper — manual mapping only
+- Controllers must be thin — no try-catch (middleware handles everything)
 - Validation happens in the service layer (inject IValidator), not controller
 - Middleware handles ALL exceptions
-- Validation calls custom ValidationException with error dictionary
+- Validation uses ValidationExtensions.ToErrorDictionary() helper
+- All responses wrapped in ApiResponse<T>
+- Services return DTOs, never entities
+- All config values read from settings (no hardcoded magic numbers) — use Options pattern
 
 ---
 
@@ -254,6 +360,23 @@ Registers: DepartmentService, EmployeeService, and all validators via `AddValida
 - `Remove`: sync — only marks Deleted in Change Tracker
 - `SaveChangesAsync`: all actual SQL runs here
 
+### Options Pattern
+- Create a POCO class matching appsettings.json section (e.g., `JwtSettings`)
+- Register with `services.Configure<JwtSettings>(configuration.GetSection("JwtSettings"))`
+- Inject `IOptions<JwtSettings>` in services, access via `.Value`
+- Better than `IConfiguration` — strongly typed, compile-time safety, testable
+
+### Why JwtTokenService is in Infrastructure
+- It depends on framework/crypto libraries (System.IdentityModel.Tokens.Jwt, Microsoft.IdentityModel.Tokens)
+- Application layer defines WHAT it needs (IJwtTokenService interface)
+- Infrastructure implements HOW (JWT signing, key management)
+- Same pattern as repositories — interface in Application, implementation in Infrastructure
+
+### Static Factory Method Pattern
+- Used in ApiResponse<T> — SuccessResponse() and FailResponse()
+- Ensures consistent object creation (Success=true always set correctly)
+- Same pattern as Task.FromResult(), Results.Ok() in .NET framework
+
 ---
 
 ## Interview Questions to Know
@@ -269,12 +392,22 @@ Registers: DepartmentService, EmployeeService, and all validators via `AddValida
 8. Why is Update() sync but AddAsync() async?
 9. What happens with concurrent updates? (RowVersion / concurrency tokens)
 
-### After Milestone 2 (answer when done):
+### After Milestone 2:
 1. Why use DTOs instead of exposing entities directly?
 2. What is FluentValidation and why over Data Annotations?
 3. How does middleware work in .NET? What is the request pipeline?
 4. Why manual mapping over AutoMapper? Trade-offs?
 5. Where should validation happen — controller, service, or both?
+
+### After Milestone 3 (answer when done):
+1. How does JWT authentication work? What are the 3 parts of a JWT?
+2. What is the difference between authentication and authorization?
+3. Why BCrypt over SHA256 for password hashing?
+4. What is the refresh token flow and why not just use a long-lived access token?
+5. What is user enumeration and how do you prevent it?
+6. Why is JwtTokenService in Infrastructure and not Application?
+7. What is the Options pattern and why use it over IConfiguration?
+8. What is token rotation and why is it important?
 
 ---
 
@@ -282,3 +415,4 @@ Registers: DepartmentService, EmployeeService, and all validators via `AddValida
 - `INSTRUCTOR_NOTES.md` — Instructor's private tracking (strengths, weaknesses, review history)
 - `MILESTONES.md` — Full milestone roadmap with status
 - `ASSISTANT_CONTEXT.md` — This file. Full context for assistant Claude
+- `PROJECT_TECHNICAL_GUIDE.md` — Comprehensive technical documentation of the full codebase
