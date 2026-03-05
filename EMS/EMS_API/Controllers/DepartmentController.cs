@@ -1,12 +1,14 @@
 using EMS_Application.Common;
 using EMS_Application.DTO.Department;
 using EMS_Application.Interfaces.Departments;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace EMS_API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class DepartmentController : ControllerBase
 {
     private readonly IDepartmentService _departmentService;
@@ -31,6 +33,7 @@ public class DepartmentController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Create([FromBody] CreateDepartmentRequest request)
     {
         var created = await _departmentService.CreateDepartmentAsync(request);
@@ -39,6 +42,7 @@ public class DepartmentController : ControllerBase
     }
 
     [HttpPut("{id}")]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Update(int id, [FromBody] UpdateDepartmentRequest request)
     {
         var updated = await _departmentService.UpdateDepartmentAsync(id, request);
@@ -46,6 +50,7 @@ public class DepartmentController : ControllerBase
     }
 
     [HttpDelete("{id}")]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Delete(int id)
     {
         await _departmentService.DeleteDepartmentAsync(id);

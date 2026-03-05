@@ -64,57 +64,76 @@ Small in scope, but deep in patterns and best practices.
 
 ---
 
-## Milestone 3: Authentication & Authorization — IN PROGRESS (~70%)
-**Challenge:** Secure your API with JWT and implement role-based access.
+## Milestone 3: Authentication & Authorization — COMPLETED ✓
+**Score: 8.5/10**
 
-### What's DONE:
+### Everything delivered:
+
+**Domain layer:**
 - [x] AppUser entity (Id, FirstName, LastName, Email, PasswordHash, Role, RefreshToken, RefreshTokenExpiryDate, IsActive, CreatedAt)
 - [x] Role enum (Admin=1, HR=2, Employee=3)
+
+**Infrastructure layer:**
 - [x] AppUserConfiguration (Fluent API: HasKey, max lengths, unique email index, PasswordHash required)
 - [x] AppDbContext updated with DbSet<AppUser>
 - [x] Migration created (20260304092250_A_E_AppUsers)
 - [x] AppUserRepository extending GenericRepository<AppUser>
 - [x] IUnitOfWork + UnitOfWork updated with AppUsers (lazy init)
-- [x] Auth DTOs: RegisterRequest, LoginRequest, AuthResponse (Token, RefreshToken, ExpiresAt, Email, Role)
-- [x] IAuthService interface (RegisterAsync, LoginAsync, RefreshTokenAsync)
-- [x] AuthService implementation with all 3 flows:
-  - Register: validate → check email unique → BCrypt hash → generate tokens → save refresh token → return
-  - Login: validate → find user → combined email/password error (prevents user enumeration) → generate tokens → save → return
-  - Refresh: find by token → check expiry → rotate tokens → save → return
-- [x] IJwtTokenService interface — returns `(string Token, DateTime ExpiresAt)` tuple
-- [x] JwtTokenService implementation — HS256, claims (Sub, Email, Role, Jti), IOptions<JwtSettings>, RandomNumberGenerator for refresh tokens
-- [x] JwtSettings class (Options pattern) — SecretKey, Issuer, Audience, AccessTokenExpirationMinutes, RefreshTokenExpirationDays
+- [x] JwtTokenService — HS256, claims (Sub, Email, Role, Jti), IOptions<JwtSettings>, RandomNumberGenerator, tuple return `(string Token, DateTime ExpiresAt)`
 - [x] JWT settings in appsettings.json, registered via services.Configure<JwtSettings>()
-- [x] Auth validators: RegisterRequestValidator (FirstName/LastName 2-50, Email valid, Password min 8), LoginRequestValidator (Email valid, Password required)
-- [x] BCrypt.Net-Next package installed
-- [x] Microsoft.AspNetCore.Authentication.JwtBearer package installed
-- [x] Microsoft.Extensions.Options package installed
-- [x] DI registered: IAuthService→AuthService (Application), IJwtTokenService→JwtTokenService (Infrastructure)
-- [x] ValidationExtensions.ToErrorDictionary() used across all services
+- [x] IJwtTokenService registered in Infrastructure DI
 
-### What's REMAINING:
-- [ ] AuthController (POST /api/auth/register, POST /api/auth/login, POST /api/auth/refresh)
-- [ ] RefreshTokenRequest DTO (for refresh endpoint body)
-- [ ] JWT authentication configuration in Program.cs (AddAuthentication, AddJwtBearer with token validation)
-- [ ] `app.UseAuthentication()` before `app.UseAuthorization()` in pipeline
-- [ ] `[Authorize]` on DepartmentController and EmployeeController (class level)
-- [ ] AuthController stays anonymous (no [Authorize])
-- [ ] Role-based authorization (Admin, HR, Employee policies)
-- [ ] Current user service (extract claims from token) — optional
+**Application layer:**
+- [x] Auth DTOs: RegisterRequest, LoginRequest, AuthResponse, RefreshTokenRequest
+- [x] IAuthService interface (RegisterAsync, LoginAsync, RefreshTokenAsync)
+- [x] IJwtTokenService interface — tuple return for token + expiry
+- [x] AuthService implementation with all 3 flows (Register, Login, Refresh)
+- [x] JwtSettings class (Options pattern)
+- [x] ValidationExtensions.ToErrorDictionary() helper
+- [x] Auth validators: RegisterRequestValidator, LoginRequestValidator
+- [x] IAuthService registered in Application DI
 
-### Review scores so far:
-- M3 Review #1 (Foundation): Good — clean entity/enum/config
-- M3 Review #2 (DTOs, Interface, Config): Good — minor naming nits only
-- M3 Review #3 (Core Implementation): 7.5/10 → fixed to 8.5/10 (3 issues found and fixed: hardcoded values, user enumeration, validation duplication)
+**API layer:**
+- [x] AuthController — POST /api/auth/register, /login, /refresh (anonymous — no [Authorize])
+- [x] JWT authentication config in Program.cs (AddAuthentication + AddJwtBearer with full token validation)
+- [x] `app.UseAuthentication()` before `app.UseAuthorization()` in pipeline
+- [x] `ClockSkew = TimeSpan.Zero` — no tolerance for expired tokens
+- [x] `[Authorize]` on DepartmentController and EmployeeController (class level)
+- [x] Role-based authorization:
+  - Department: GET = any authenticated user, POST/PUT/DELETE = Admin only
+  - Employee: GET = any authenticated user, POST/PUT = Admin or HR, DELETE = Admin only
+- [x] Microsoft.AspNetCore.Authentication.JwtBearer package installed in API
+
+**Packages installed in M3:**
+- BCrypt.Net-Next (4.1.0) in Application
+- Microsoft.Extensions.Options (10.0.3) in Application
+- Microsoft.AspNetCore.Authentication.JwtBearer (10.0.3) in API
+
+### Review scores:
+- M3 Review #1 (Foundation): Good
+- M3 Review #2 (DTOs, Interface, Config): Good
+- M3 Review #3 (Core Implementation): 7.5/10 → fixed to 8.5/10
+- M3 Review #5 (Final — Controller, JWT config, Authorization): 8.5/10 — COMPLETED
 
 ### Security decisions:
 - Login: same error for wrong email AND wrong password (prevents user enumeration)
 - Refresh token rotation on every refresh (old token invalidated)
-- 500 errors never leak internal details
 - BCrypt for password hashing (intentionally slow, salted)
+- ClockSkew = TimeSpan.Zero (no 5-minute tolerance on expired tokens)
+- 500 errors never leak internal details
 - No hardcoded expiry values — all from JwtSettings via Options pattern
 
-**Interview topics this covers:**
+### Authorization matrix:
+| Endpoint | Admin | HR | Employee |
+|---|---|---|---|
+| GET departments | ✓ | ✓ | ✓ |
+| POST/PUT/DELETE departments | ✓ | ✗ | ✗ |
+| GET employees | ✓ | ✓ | ✓ |
+| POST/PUT employees | ✓ | ✓ | ✗ |
+| DELETE employees | ✓ | ✗ | ✗ |
+| Auth endpoints (register/login/refresh) | Public | Public | Public |
+
+**Interview topics covered:**
 - "Explain JWT authentication flow"
 - "Difference between Authentication and Authorization"
 - "How do refresh tokens work?"
@@ -123,6 +142,8 @@ Small in scope, but deep in patterns and best practices.
 - "What is user enumeration and how do you prevent it?"
 - "What is the Options pattern?"
 - "What is token rotation?"
+- "Why ClockSkew = TimeSpan.Zero?"
+- "How does [Authorize(Roles)] work under the hood?"
 
 **Deliverable:** Secured API — only authenticated users access resources, roles control actions.
 

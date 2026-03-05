@@ -382,7 +382,6 @@ Called in `Program.cs` as `builder.Services.AddApplication()`.
 **NuGet packages:**
 - `Microsoft.EntityFrameworkCore.SqlServer` (10.0.3) — SQL Server database provider
 - `Microsoft.EntityFrameworkCore.Tools` (10.0.3) — Migrations CLI (`dotnet ef`)
-- `Microsoft.AspNetCore.Authentication.JwtBearer` (10.0.3) — JWT token validation middleware (Added in M3)
 
 #### 3.3.1 AppDbContext (`Data/AppDbContext.cs`)
 
@@ -499,6 +498,7 @@ Run `dotnet ef database update` from the EMS_Infrastructure project to apply pen
 - `Microsoft.AspNetCore.OpenApi` (10.0.2) — OpenAPI metadata
 - `Microsoft.EntityFrameworkCore.Design` (10.0.3) — Design-time support for migrations
 - `Swashbuckle.AspNetCore` (10.1.4) — Swagger UI
+- `Microsoft.AspNetCore.Authentication.JwtBearer` (10.0.3) — JWT token validation middleware (Added in M3)
 
 #### 3.4.1 Program.cs — The Entry Point
 
@@ -511,21 +511,53 @@ The entire app startup in one file:
    - AddSwaggerGen()
    - AddApplication()       ← services, validators, auth service
    - AddInfrastructure()    ← DbContext, UnitOfWork, JwtTokenService, JwtSettings
+   - AddAuthentication()    ← JWT Bearer scheme config (M3)
+   - AddAuthorization()     ← enables [Authorize] attribute (M3)
 3. Build the app
 4. Configure middleware pipeline (ORDER MATTERS):
    - Swagger (dev only)
    - ExceptionHandlingMiddleware  ← catches all exceptions
    - HTTPS redirection
-   - Authorization
+   - UseAuthentication()          ← WHO are you? Reads JWT, sets HttpContext.User (M3)
+   - UseAuthorization()           ← Are you ALLOWED? Checks [Authorize], roles (M3)
    - MapControllers
 5. Run
 ```
 
-**Middleware order matters.** The exception middleware is placed early so it catches exceptions from everything downstream (controllers, services, etc.). If it were placed after authorization, auth failures wouldn't be caught by it.
+**Middleware order matters.** The exception middleware is placed early so it catches exceptions from everything downstream (controllers, services, etc.). `UseAuthentication()` MUST come before `UseAuthorization()` — authentication reads the JWT and sets the user identity, then authorization checks that identity against `[Authorize]` rules. Reverse them and authorization runs before the identity is known.
 
-**What's still needed in Program.cs (remaining M3 work):**
-- `AddAuthentication().AddJwtBearer(...)` — configure JWT token validation
-- `app.UseAuthentication()` before `app.UseAuthorization()` — enable the auth middleware
+#### 3.4.1a JWT Authentication Configuration (Added in M3)
+
+```csharp
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(options =>
+{
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuer = true,           // Token must be issued by "EMS_API"
+        ValidateAudience = true,         // Token must be for "EMS_Client"
+        ValidateLifetime = true,         // Reject expired tokens
+        ValidateIssuerSigningKey = true, // Verify signature with our secret key
+        ValidIssuer = "EMS_API",
+        ValidAudience = "EMS_Client",
+        IssuerSigningKey = new SymmetricSecurityKey(...),
+        ClockSkew = TimeSpan.Zero        // No tolerance for expired tokens
+    };
+});
+```
+
+**What each validation does:**
+- **ValidateIssuer:** Checks the `iss` claim in the JWT matches "EMS_API". Prevents tokens from other systems being accepted.
+- **ValidateAudience:** Checks the `aud` claim matches "EMS_Client". Ensures the token was meant for this API.
+- **ValidateLifetime:** Checks the `exp` claim. Rejects tokens past their expiry time.
+- **ValidateIssuerSigningKey:** Verifies the token signature using our secret key. Ensures the token wasn't tampered with.
+- **ClockSkew = TimeSpan.Zero:** By default, .NET adds 5 minutes of tolerance — a token expired 4 minutes ago would still be accepted. We set it to zero for precise expiry. In production with distributed systems, you might want 30 seconds.
+
+**DefaultAuthenticateScheme / DefaultChallengeScheme:** Tells .NET which scheme to use when `[Authorize]` is encountered. "Challenge" means what to do when auth fails — JWT Bearer returns 401 Unauthorized.
 
 #### 3.4.2 Exception Handling Middleware (`Middleware/ExceptionHandlingMiddleware.cs`)
 
@@ -564,43 +596,60 @@ JSON is serialized with `JsonNamingPolicy.CamelCase` to match JavaScript/fronten
 
 #### 3.4.3 Controllers (`Controllers/`)
 
-**DepartmentController** and **EmployeeController** — thin REST controllers. They:
-1. Receive HTTP requests
-2. Call the corresponding service method
-3. Wrap the result in `ApiResponse<T>.SuccessResponse()`
-4. Return with appropriate HTTP status code
+All controllers are thin — no try-catch, no validation logic. They call the service and wrap the result in `ApiResponse<T>`. The exception middleware handles all errors.
 
-**No try-catch in controllers.** The exception middleware handles all error cases. Controllers only handle the happy path. This keeps them thin and focused.
+**AuthController** (`Controllers/AuthController.cs`) — Added in M3:
+- **No `[Authorize]`** — all endpoints are anonymous (you can't require auth on the endpoints that give you auth)
+- 3 POST endpoints calling IAuthService
 
-**Department & Employee Endpoints:**
+| HTTP Method | Route | Auth | Action | Returns |
+|---|---|---|---|---|
+| POST | /api/auth/register | Public | Register new user | 200 + AuthResponse (tokens) |
+| POST | /api/auth/login | Public | Login | 200 + AuthResponse (tokens) |
+| POST | /api/auth/refresh | Public | Refresh tokens | 200 + AuthResponse (new tokens) |
 
-| HTTP Method | Route | Action | Returns |
-|---|---|---|---|
-| GET | /api/department | GetAll | 200 + list |
-| GET | /api/department/{id} | GetById | 200 + single |
-| POST | /api/department | Create | 201 + created entity (CreatedAtAction) |
-| PUT | /api/department/{id} | Update | 200 + updated entity |
-| DELETE | /api/department/{id} | Delete | 200 + success message |
+The refresh endpoint takes a `RefreshTokenRequest` DTO (just `{ "refreshToken": "..." }`) — this avoids passing a raw string as the body.
 
-Same pattern for `/api/employee`.
+**DepartmentController** (`Controllers/DepartmentController.cs`):
+- **Class-level `[Authorize]`** — all endpoints require authentication
+- Write operations restricted to Admin via `[Authorize(Roles = "Admin")]`
 
-**`CreatedAtAction`:** For POST endpoints, returns 201 status with a `Location` header pointing to the GET endpoint for the newly created resource. This is proper REST — tells the client where to find the thing they just created.
+| HTTP Method | Route | Auth | Action | Returns |
+|---|---|---|---|---|
+| GET | /api/department | Any authenticated | GetAll | 200 + list |
+| GET | /api/department/{id} | Any authenticated | GetById | 200 + single |
+| POST | /api/department | Admin only | Create | 201 + created (CreatedAtAction) |
+| PUT | /api/department/{id} | Admin only | Update | 200 + updated |
+| DELETE | /api/department/{id} | Admin only | Delete | 200 + success message |
 
-**Auth endpoints (still to be built):**
+**EmployeeController** (`Controllers/EmployeeController.cs`):
+- **Class-level `[Authorize]`** — all endpoints require authentication
+- Write operations restricted by role
 
-| HTTP Method | Route | Action | Returns |
-|---|---|---|---|
-| POST | /api/auth/register | Register | 200 + AuthResponse (tokens) |
-| POST | /api/auth/login | Login | 200 + AuthResponse (tokens) |
-| POST | /api/auth/refresh | Refresh | 200 + AuthResponse (new tokens) |
+| HTTP Method | Route | Auth | Action | Returns |
+|---|---|---|---|---|
+| GET | /api/employee | Any authenticated | GetAll | 200 + list |
+| GET | /api/employee/{id} | Any authenticated | GetById | 200 + single |
+| POST | /api/employee | Admin or HR | Create | 201 + created (CreatedAtAction) |
+| PUT | /api/employee/{id} | Admin or HR | Update | 200 + updated |
+| DELETE | /api/employee/{id} | Admin only | Delete | 200 + success message |
+
+**How role-based `[Authorize]` works:**
+1. `JwtTokenService` puts `ClaimTypes.Role` (e.g., "Admin") in the JWT claims when generating the token
+2. When a request arrives with `Authorization: Bearer <token>`, the JWT Bearer middleware validates the token and extracts claims into `HttpContext.User`
+3. `[Authorize(Roles = "Admin")]` calls `User.IsInRole("Admin")` which looks for a `ClaimTypes.Role` claim with that value
+4. `[Authorize(Roles = "Admin,HR")]` means either role is accepted (OR logic)
+5. This is automatic — but only because we used `ClaimTypes.Role` specifically. A custom claim type like `"role"` would NOT work with `[Authorize(Roles)]`
+
+**`CreatedAtAction`:** For POST endpoints, returns 201 status with a `Location` header pointing to the GET endpoint for the newly created resource. This is proper REST.
 
 ---
 
 ## 4. How Requests Flow Through the System
 
-### 4.1 Normal CRUD flow (e.g., Create Department)
+### 4.1 Normal CRUD flow (e.g., Create Department — requires Admin role)
 
-`POST /api/department` with body `{ "name": "HR", "code": "HR01" }`
+`POST /api/department` with header `Authorization: Bearer <jwt-token>` and body `{ "name": "HR", "code": "HR01" }`
 
 ```
 1. HTTP Request hits Program.cs pipeline
@@ -608,9 +657,17 @@ Same pattern for `/api/employee`.
 2. ExceptionHandlingMiddleware.InvokeAsync()
    └─ calls await _next(context) — passes to next middleware
 
-3. Routing middleware matches → DepartmentController.Create()
+3. UseAuthentication() — reads JWT from Authorization header
+   └─ Validates signature, issuer, audience, expiry
+   └─ Extracts claims (sub, email, role) → sets HttpContext.User
 
-4. Controller calls _departmentService.CreateDepartmentAsync(request)
+4. UseAuthorization() — checks [Authorize(Roles = "Admin")]
+   └─ Calls User.IsInRole("Admin") → checks ClaimTypes.Role claim
+   └─ If not Admin → 403 Forbidden (never reaches controller)
+
+5. Routing middleware matches → DepartmentController.Create()
+
+6. Controller calls _departmentService.CreateDepartmentAsync(request)
 
 5. DepartmentService:
    a. Validates request with _createValidator.ValidateAsync(request)
@@ -818,6 +875,7 @@ EMS/
 │   │   └── Auth/                       ← M3
 │   │       ├── RegisterRequest.cs
 │   │       ├── LoginRequest.cs
+│   │       ├── RefreshTokenRequest.cs
 │   │       └── AuthResponse.cs
 │   ├── Exceptions/
 │   │   ├── NotFoundException.cs
@@ -880,6 +938,7 @@ EMS/
     ├── Middleware/
     │   └── ExceptionHandlingMiddleware.cs
     └── Controllers/
+        ├── AuthController.cs          ← M3
         ├── DepartmentController.cs
         └── EmployeeController.cs
 ```
@@ -897,10 +956,10 @@ EMS/
 | EMS_Application | Microsoft.Extensions.Options | 10.0.3 | `IOptions<T>` for strongly-typed config (M3) |
 | EMS_Infrastructure | Microsoft.EntityFrameworkCore.SqlServer | 10.0.3 | SQL Server database provider |
 | EMS_Infrastructure | Microsoft.EntityFrameworkCore.Tools | 10.0.3 | Migrations CLI (`dotnet ef`) |
-| EMS_Infrastructure | Microsoft.AspNetCore.Authentication.JwtBearer | 10.0.3 | JWT token validation middleware (M3) |
 | EMS_API | Microsoft.AspNetCore.OpenApi | 10.0.2 | OpenAPI metadata |
 | EMS_API | Microsoft.EntityFrameworkCore.Design | 10.0.3 | Design-time support for migrations |
 | EMS_API | Swashbuckle.AspNetCore | 10.1.4 | Swagger UI |
+| EMS_API | Microsoft.AspNetCore.Authentication.JwtBearer | 10.0.3 | JWT token validation middleware (M3) |
 
 ---
 
@@ -931,15 +990,33 @@ EMS/
 
 ## 10. What's Still TODO
 
-### Milestone 3 Remaining (~30%):
-1. **AuthController** — POST endpoints for register, login, refresh
-2. **RefreshTokenRequest DTO** — for the refresh endpoint body
-3. **JWT middleware config in Program.cs** — `AddAuthentication().AddJwtBearer()` with token validation params
-4. **`app.UseAuthentication()`** before `app.UseAuthorization()` in pipeline
-5. **`[Authorize]`** on Department and Employee controllers (class level)
-6. **Role-based authorization** — restrict certain actions to Admin/HR
+### Completed Milestones:
+- **Milestone 1:** Project Setup & Clean Architecture (Score: 7.5/10) ✓
+- **Milestone 2:** DTOs, Validation & Global Error Handling (Score: 8.5/10) ✓
+- **Milestone 3:** Authentication & Authorization (Score: 8.5/10) ✓
 
-### Milestones 4-6 (Future):
-- Pagination, filtering, sorting, caching
-- CQRS with MediatR, domain events
-- Background jobs, logging, testing, API versioning
+### Milestone 4: Advanced Querying & Performance (NOT STARTED)
+- Pagination (PagedList<T>)
+- Filtering & Searching (dynamic query building)
+- Sorting (dynamic, by any property)
+- Specification Pattern
+- In-Memory Caching (IMemoryCache)
+- Response caching headers
+- Attendance entity + endpoints
+- EF Core query optimization (AsNoTracking, Select projections)
+
+### Milestone 5: CQRS with MediatR (NOT STARTED)
+- MediatR setup (Commands & Queries)
+- CQRS pattern (separate read/write models)
+- Pipeline Behaviors (logging, validation)
+- Leave Request feature (Apply, Approve, Reject)
+- Domain Events + Notification handlers
+
+### Milestone 6: Background Jobs, Logging & Polish (NOT STARTED)
+- Serilog structured logging
+- Correlation ID middleware
+- Background jobs (Hosted Service)
+- API Versioning
+- Rate Limiting
+- Health Checks
+- Unit Tests (xUnit + Moq)

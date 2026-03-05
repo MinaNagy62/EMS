@@ -1,12 +1,14 @@
 using EMS_Application.Common;
 using EMS_Application.DTO.Employee;
 using EMS_Application.Interfaces.Employees;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace EMS_API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class EmployeeController : ControllerBase
 {
     private readonly IEmployeeService _employeeService;
@@ -31,6 +33,7 @@ public class EmployeeController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Roles = "Admin,HR")]
     public async Task<IActionResult> Create([FromBody] CreateEmployeeRequest request)
     {
         var created = await _employeeService.CreateEmployeeAsync(request);
@@ -39,6 +42,7 @@ public class EmployeeController : ControllerBase
     }
 
     [HttpPut("{id}")]
+    [Authorize(Roles = "Admin,HR")]
     public async Task<IActionResult> Update(int id, [FromBody] UpdateEmployeeRequest request)
     {
         var updated = await _employeeService.UpdateEmployeeAsync(id, request);
@@ -46,6 +50,7 @@ public class EmployeeController : ControllerBase
     }
 
     [HttpDelete("{id}")]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Delete(int id)
     {
         await _employeeService.DeleteEmployeeAsync(id);

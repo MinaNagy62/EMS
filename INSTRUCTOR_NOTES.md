@@ -20,8 +20,8 @@
 | Error Handling & Middleware | Done M2 | Global Exception Handling Middleware with switch expression, camelCase JSON |
 | ValidationExtensions Helper | Done M3 | ToErrorDictionary() extension extracted from duplicated code across 6 service methods |
 | Options Pattern | Done M3 | JwtSettings class with IOptions<JwtSettings> — used in JwtTokenService and AuthService |
-| Authentication (JWT) | In Progress M3 | JwtTokenService done, AuthService done with all 3 flows. Still needs AuthController + middleware config |
-| Authorization (Role & Policy based) | Not Started | Pending in M3 |
+| Authentication (JWT) | Done M3 | Full JWT auth: JwtTokenService, AuthService (3 flows), AuthController, JWT middleware in Program.cs |
+| Authorization (Role & Policy based) | Done M3 | [Authorize] on controllers, role-based: Admin/HR/Employee with proper access matrix |
 | Pagination, Filtering, Sorting | Not Started | - |
 | Caching (In-Memory & Distributed) | Not Started | - |
 | Background Jobs (Hangfire/Hosted Services) | Not Started | - |
@@ -196,15 +196,33 @@ Also fixed:
 - Department validators: `.Must()` replaced with `.Matches(@"^[A-Z0-9]+$")` — null-safe (M2 carry-forward finally resolved)
 - Both DepartmentService and EmployeeService now use `ToErrorDictionary()` too
 
-#### What is still pending to complete M3:
-1. AuthController (POST /api/auth/register, POST /api/auth/login, POST /api/auth/refresh)
-2. RefreshTokenRequest DTO (for refresh endpoint body)
-3. JWT authentication configuration in Program.cs (AddAuthentication, AddJwtBearer)
-4. `app.UseAuthentication()` before `app.UseAuthorization()` in pipeline
-5. Install Microsoft.AspNetCore.Authentication.JwtBearer in EMS_API
-6. `[Authorize]` on DepartmentController and EmployeeController
-7. Role-based authorization policies
-8. Current user service (optional for M3)
+#### M3 Review #5 (Final) — 2026-03-05 — COMPLETED
+**Score: 8.5/10**
+
+Final sprint completed (built by instructor as code-along):
+1. **RefreshTokenRequest DTO** — simple DTO with RefreshToken property for the refresh endpoint body
+2. **AuthController** — 3 POST endpoints (register, login, refresh). Thin controller, no try-catch, no [Authorize]. All anonymous.
+3. **JWT Bearer config in Program.cs:**
+   - AddAuthentication with JwtBearerDefaults as default scheme
+   - AddJwtBearer with full TokenValidationParameters (Issuer, Audience, SigningKey, Lifetime)
+   - ClockSkew = TimeSpan.Zero — no 5-minute tolerance on expired tokens
+4. **Middleware pipeline order corrected:** UseAuthentication() before UseAuthorization()
+5. **[Authorize] on controllers:**
+   - DepartmentController: class-level [Authorize], POST/PUT/DELETE restricted to Admin
+   - EmployeeController: class-level [Authorize], POST/PUT restricted to Admin+HR, DELETE restricted to Admin
+6. **Microsoft.AspNetCore.Authentication.JwtBearer package** installed in EMS_API
+
+Authorization matrix:
+| Endpoint | Admin | HR | Employee |
+|---|---|---|---|
+| GET departments | ✓ | ✓ | ✓ |
+| POST/PUT/DELETE departments | ✓ | ✗ | ✗ |
+| GET employees | ✓ | ✓ | ✓ |
+| POST/PUT employees | ✓ | ✓ | ✗ |
+| DELETE employees | ✓ | ✗ | ✗ |
+| Auth (register/login/refresh) | Public | Public | Public |
+
+Note: This final sprint was built by the instructor (me) as a code-along — developer asked for help to finish M3. Code quality is clean, follows all established patterns.
 
 ## Strengths Identified (Across Milestones)
 1. Learns from feedback — every issue raised has been addressed
@@ -218,9 +236,11 @@ Also fixed:
 9. Tuple return from JwtTokenService — ties ExpiresAt to actual token expiry (no drift)
 10. Security awareness — fixed user enumeration after being shown the issue
 11. Responsive to feedback — fixes issues in same session, doesn't push back
+12. Asks good questions — asked about ClaimTypes.Role auto-detection and Options pattern binding (shows curiosity)
 
 ## Weaknesses / Areas to Watch
 1. Attention to detail on first pass — misses edge cases (null-safety, hardcoded values, security leaks)
 2. Tends to hardcode values before being reminded to use config/options
 3. Needs prompting to think about security implications (user enumeration wasn't caught independently)
 4. Code duplication builds up until called out (validation logic was copied 6 times before extraction)
+5. Needed help finishing M3 final sprint (controller + JWT config + authorization) — not a weakness per se, but shows the API/middleware wiring is less familiar than the service/domain work
