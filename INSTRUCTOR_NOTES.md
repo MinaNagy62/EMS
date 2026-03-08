@@ -22,8 +22,10 @@
 | Options Pattern | Done M3 | JwtSettings class with IOptions<JwtSettings> — used in JwtTokenService and AuthService |
 | Authentication (JWT) | Done M3 | Full JWT auth: JwtTokenService, AuthService (3 flows), AuthController, JWT middleware in Program.cs |
 | Authorization (Role & Policy based) | Done M3 | [Authorize] on controllers, role-based: Admin/HR/Employee with proper access matrix |
-| Pagination, Filtering, Sorting | Not Started | - |
-| Caching (In-Memory & Distributed) | Not Started | - |
+| Pagination | Done M4 | PagedRequest/PagedResponse<T>, BaseEntity constraint, Skip/Take, deterministic OrderBy |
+| Filtering & Searching | Done M4 | Query DTOs extending PagedRequest, dynamic filter list, case-insensitive search |
+| Sorting | Done M4 | Dynamic expression tree (Expression.Property + Expression.Convert), reflection with BindingFlags.IgnoreCase |
+| Caching (In-Memory) | Done M4 | IMemoryCache on DepartmentService, CancellationTokenSource bulk invalidation, sliding+absolute expiry |
 | Background Jobs (Hangfire/Hosted Services) | Not Started | - |
 | Logging (Serilog structured logging) | Not Started | - |
 | Unit Testing & Integration Testing | Not Started | - |
@@ -224,6 +226,68 @@ Authorization matrix:
 
 Note: This final sprint was built by the instructor (me) as a code-along — developer asked for help to finish M3. Code quality is clean, follows all established patterns.
 
+### Milestone 4 Progress Reviews
+
+#### M4 Review #1 — Pagination (Sprint 1)
+**Score: 8/10 → fixed to 9/10**
+
+What was completed:
+1. PagedRequest with PageNumber (default 1) and PageSize (default 10)
+2. PagedResponse<T> with Items, PageNumber, PageSize, TotalCount, computed TotalPages/HasPreviousPage/HasNextPage
+3. GetPagedAsync in GenericRepository — CountAsync then Skip/Take with ToListAsync
+4. IDepartmentService/DepartmentService updated to use PagedRequest/PagedResponse
+5. DepartmentController GetAll uses [FromQuery] PagedRequest
+
+Issues found (3):
+1. **No input validation on PagedRequest** — negative page or huge page size. FIXED: private backing fields with clamping in setters, MaxPageSize=50
+2. **Employee not paginated** — FIXED: same pattern applied to EmployeeService/Controller
+3. **No deterministic ordering** — Skip/Take without OrderBy gives inconsistent pages. FIXED: Created BaseEntity with Id, changed constraint from `where T : class` to `where T : BaseEntity`, added `.OrderBy(x => x.Id)` before Skip/Take
+
+Key decision: BaseEntity abstraction — constrains generic repository to entities with Id, enabling default sorting. Shows good architectural thinking.
+
+#### M4 Review #2 — Filtering & Searching (Sprint 2)
+**Score: 8.5/10**
+
+What was completed:
+1. DepartmentQueryRequest extends PagedRequest (Search, IsActive)
+2. EmployeeQueryRequest extends PagedRequest (Search, DepartmentId, Gender)
+3. GetPagedAsync signature changed from single filter to `List<Expression<Func<T, bool>>>`
+4. Dynamic filter building in service layer — each Where() becomes AND in SQL
+5. Case-insensitive search with .ToLower().Contains()
+6. Department IsActive filter overridable (defaults to true)
+7. Controllers updated with [FromQuery] query DTOs
+
+Design decision: Chose Option A (build filters in service, keep repo generic) — correct. Preserves dependency rule, keeps repo reusable, business logic stays in service.
+
+#### M4 Review #3 — Sorting (Sprint 3)
+**Score: 9/10**
+
+What was completed:
+1. SortBy and SortDescending added to PagedRequest
+2. ApplySorting private static method in GenericRepository
+3. Reflection with BindingFlags.IgnoreCase for case-insensitive property lookup
+4. Expression tree: Expression.Parameter → Expression.Property → Expression.Convert → Expression.Lambda
+5. Invalid property silently falls back to Id (no crash)
+6. OrderByDescending when SortDescending=true
+
+Expression tree understanding is strong — correctly handled boxing value types with Expression.Convert for Func<T, object>.
+
+#### M4 Review #4 (Final) — Caching (Sprint 4)
+**Score: 9.5/10**
+
+What was completed:
+1. IMemoryCache injected into DepartmentService (not repository — correct layer)
+2. Cache key built from all query params (page, size, search, isActive, sortBy, sortDescending)
+3. Sliding expiration (10 min) + absolute expiration (1 hour)
+4. CancellationTokenSource for bulk invalidation — all entries linked via CancellationChangeToken
+5. InvalidateCache() on Create, Update, Delete — cancel, dispose, replace CTS
+6. AddMemoryCache() in Program.cs
+7. Only departments cached (not employees — correct trade-off)
+
+Static _cacheResetToken is correct because IMemoryCache is singleton and CTS must outlive scoped DepartmentService instances.
+
+**Milestone 4 Final Score: 9/10**
+
 ## Strengths Identified (Across Milestones)
 1. Learns from feedback — every issue raised has been addressed
 2. Good instinct for code organization (restructured Domain layer on own initiative)
@@ -237,6 +301,10 @@ Note: This final sprint was built by the instructor (me) as a code-along — dev
 10. Security awareness — fixed user enumeration after being shown the issue
 11. Responsive to feedback — fixes issues in same session, doesn't push back
 12. Asks good questions — asked about ClaimTypes.Role auto-detection and Options pattern binding (shows curiosity)
+13. BaseEntity extraction for generic constraint — independently solved the deterministic ordering problem with the right architectural approach
+14. Expression tree construction — understood boxing, reflection, and lambda building on first attempt
+15. CancellationTokenSource for cache invalidation — chose the advanced pattern over simple key tracking
+16. Consistent improvement trajectory — scores: 7.5 → 8.5 → 8.5 → 9.0
 
 ## Weaknesses / Areas to Watch
 1. Attention to detail on first pass — misses edge cases (null-safety, hardcoded values, security leaks)

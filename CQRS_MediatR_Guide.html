@@ -1,0 +1,1646 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CQRS & MediatR — From Zero to Hero</title>
+    <style>
+        :root {
+            --bg: #0d1117;
+            --card: #161b22;
+            --border: #30363d;
+            --text: #e6edf3;
+            --muted: #8b949e;
+            --accent: #58a6ff;
+            --green: #3fb950;
+            --red: #f85149;
+            --orange: #d29922;
+            --purple: #bc8cff;
+            --cyan: #39d2c0;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.7;
+            padding: 0;
+        }
+
+        /* ===== NAVIGATION ===== */
+        nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 280px;
+            height: 100vh;
+            background: var(--card);
+            border-right: 1px solid var(--border);
+            overflow-y: auto;
+            padding: 20px 0;
+            z-index: 100;
+        }
+
+        nav h2 {
+            color: var(--accent);
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            padding: 0 20px 10px;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 10px;
+        }
+
+        nav a {
+            display: block;
+            color: var(--muted);
+            text-decoration: none;
+            padding: 6px 20px;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+
+        nav a:hover {
+            color: var(--accent);
+            background: rgba(88, 166, 255, 0.1);
+        }
+
+        nav a.section-title {
+            color: var(--text);
+            font-weight: 600;
+            font-size: 14px;
+            margin-top: 12px;
+        }
+
+        /* ===== MAIN CONTENT ===== */
+        main {
+            margin-left: 280px;
+            max-width: 900px;
+            padding: 40px 60px 100px;
+        }
+
+        h1 {
+            font-size: 36px;
+            margin-bottom: 10px;
+            color: var(--text);
+        }
+
+        h1 span { color: var(--accent); }
+
+        .subtitle {
+            color: var(--muted);
+            font-size: 18px;
+            margin-bottom: 40px;
+        }
+
+        h2 {
+            font-size: 26px;
+            margin-top: 60px;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border);
+            color: var(--text);
+        }
+
+        h3 {
+            font-size: 20px;
+            margin-top: 35px;
+            margin-bottom: 15px;
+            color: var(--accent);
+        }
+
+        h4 {
+            font-size: 16px;
+            margin-top: 25px;
+            margin-bottom: 10px;
+            color: var(--purple);
+        }
+
+        p { margin-bottom: 16px; }
+
+        strong { color: var(--text); }
+
+        /* ===== CODE BLOCKS ===== */
+        pre {
+            background: #0d1117;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 20px;
+            overflow-x: auto;
+            margin: 16px 0 24px;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        code {
+            font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', Consolas, monospace;
+            font-size: 13px;
+        }
+
+        p code, li code, td code {
+            background: rgba(88, 166, 255, 0.1);
+            color: var(--accent);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+
+        /* Syntax highlighting */
+        .kw { color: #ff7b72; }
+        .type { color: #79c0ff; }
+        .str { color: #a5d6ff; }
+        .cmt { color: #8b949e; font-style: italic; }
+        .num { color: #79c0ff; }
+        .fn { color: #d2a8ff; }
+        .attr { color: #7ee787; }
+        .param { color: #ffa657; }
+
+        /* ===== CALLOUT BOXES ===== */
+        .box {
+            border-radius: 8px;
+            padding: 20px 24px;
+            margin: 20px 0;
+            border-left: 4px solid;
+        }
+
+        .box-blue {
+            background: rgba(88, 166, 255, 0.08);
+            border-color: var(--accent);
+        }
+
+        .box-green {
+            background: rgba(63, 185, 80, 0.08);
+            border-color: var(--green);
+        }
+
+        .box-orange {
+            background: rgba(210, 153, 34, 0.08);
+            border-color: var(--orange);
+        }
+
+        .box-red {
+            background: rgba(248, 81, 73, 0.08);
+            border-color: var(--red);
+        }
+
+        .box-purple {
+            background: rgba(188, 140, 255, 0.08);
+            border-color: var(--purple);
+        }
+
+        .box h4 {
+            margin-top: 0;
+            margin-bottom: 8px;
+        }
+
+        .box p:last-child { margin-bottom: 0; }
+
+        /* ===== TABLES ===== */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0 24px;
+            font-size: 14px;
+        }
+
+        th, td {
+            padding: 10px 14px;
+            text-align: left;
+            border: 1px solid var(--border);
+        }
+
+        th {
+            background: var(--card);
+            color: var(--accent);
+            font-weight: 600;
+        }
+
+        tr:hover { background: rgba(88, 166, 255, 0.04); }
+
+        /* ===== FLOW DIAGRAMS ===== */
+        .flow {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 24px;
+            margin: 20px 0;
+            font-family: 'Cascadia Code', monospace;
+            font-size: 13px;
+            line-height: 1.8;
+            overflow-x: auto;
+            white-space: pre;
+        }
+
+        .flow .arrow { color: var(--green); }
+        .flow .label { color: var(--accent); }
+        .flow .dim { color: var(--muted); }
+
+        /* ===== LISTS ===== */
+        ul, ol {
+            margin: 12px 0 16px 24px;
+        }
+
+        li {
+            margin-bottom: 6px;
+        }
+
+        /* ===== COMPARISON ===== */
+        .compare {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin: 20px 0;
+        }
+
+        .compare > div {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 20px;
+        }
+
+        .compare h4 { margin-top: 0; }
+
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .badge-red { background: rgba(248, 81, 73, 0.2); color: var(--red); }
+        .badge-green { background: rgba(63, 185, 80, 0.2); color: var(--green); }
+
+        /* ===== STEP INDICATORS ===== */
+        .step {
+            display: flex;
+            align-items: flex-start;
+            gap: 16px;
+            margin: 20px 0;
+        }
+
+        .step-num {
+            flex-shrink: 0;
+            width: 32px;
+            height: 32px;
+            background: var(--accent);
+            color: var(--bg);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 14px;
+        }
+
+        .step-content { flex: 1; }
+        .step-content h4 { margin-top: 0; color: var(--text); }
+
+        /* ===== INTERVIEW ===== */
+        .interview {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin: 16px 0;
+            overflow: hidden;
+        }
+
+        .interview summary {
+            padding: 14px 20px;
+            cursor: pointer;
+            font-weight: 600;
+            color: var(--orange);
+            user-select: none;
+        }
+
+        .interview summary:hover {
+            background: rgba(210, 153, 34, 0.08);
+        }
+
+        .interview .answer {
+            padding: 0 20px 16px;
+            color: var(--muted);
+            border-top: 1px solid var(--border);
+            padding-top: 16px;
+        }
+
+        /* ===== SCROLLBAR ===== */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: var(--bg); }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+        /* ===== RESPONSIVE ===== */
+        @media (max-width: 1024px) {
+            nav { display: none; }
+            main { margin-left: 0; padding: 20px; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- ===== NAVIGATION ===== -->
+<nav>
+    <h2>CQRS & MediatR Guide</h2>
+
+    <a href="#intro" class="section-title">1. The Problem</a>
+    <a href="#fat-service">Fat Service Problem</a>
+    <a href="#real-example">Your Real Code</a>
+
+    <a href="#cqrs" class="section-title">2. CQRS Explained</a>
+    <a href="#what-is-cqrs">What Is CQRS?</a>
+    <a href="#commands-vs-queries">Commands vs Queries</a>
+    <a href="#cqrs-benefits">Why It's Better</a>
+
+    <a href="#mediatr" class="section-title">3. MediatR</a>
+    <a href="#what-is-mediatr">What Is MediatR?</a>
+    <a href="#irequest">IRequest Interface</a>
+    <a href="#irequesthandler">IRequestHandler Interface</a>
+    <a href="#imediator">IMediator in Controller</a>
+    <a href="#full-flow">Full Request Flow</a>
+
+    <a href="#building" class="section-title">4. Building It Step by Step</a>
+    <a href="#step1-install">Step 1: Install MediatR</a>
+    <a href="#step2-query">Step 2: First Query</a>
+    <a href="#step3-command">Step 3: First Command</a>
+    <a href="#step4-controller">Step 4: Refactor Controller</a>
+    <a href="#step5-folder">Step 5: Folder Structure</a>
+
+    <a href="#behaviors" class="section-title">5. Pipeline Behaviors</a>
+    <a href="#what-are-behaviors">What Are They?</a>
+    <a href="#validation-behavior">Validation Behavior</a>
+    <a href="#logging-behavior">Logging Behavior</a>
+    <a href="#behavior-registration">Registering Behaviors</a>
+    <a href="#behavior-order">Execution Order</a>
+
+    <a href="#advanced" class="section-title">6. Advanced Patterns</a>
+    <a href="#notifications">Notifications (Events)</a>
+    <a href="#void-commands">Commands Without Return</a>
+    <a href="#cancellation-tokens">CancellationToken</a>
+
+    <a href="#your-project" class="section-title">7. In Your EMS Project</a>
+    <a href="#ems-before-after">Before vs After</a>
+    <a href="#ems-departments">Departments Refactored</a>
+    <a href="#ems-employees">Employees Refactored</a>
+    <a href="#ems-structure">Final Folder Structure</a>
+
+    <a href="#when-to-use" class="section-title">8. When to Use</a>
+    <a href="#use-service">Use Service When...</a>
+    <a href="#use-cqrs">Use CQRS When...</a>
+
+    <a href="#interview" class="section-title">9. Interview Questions</a>
+
+    <a href="#cheatsheet" class="section-title">10. Cheat Sheet</a>
+</nav>
+
+<!-- ===== MAIN CONTENT ===== -->
+<main>
+
+<h1>CQRS & <span>MediatR</span></h1>
+<p class="subtitle">A complete guide from zero to hero — with examples from your EMS project</p>
+
+<!-- ============================================================ -->
+<!-- SECTION 1: THE PROBLEM -->
+<!-- ============================================================ -->
+<h2 id="intro">1. The Problem We're Solving</h2>
+
+<h3 id="fat-service">The Fat Service Problem</h3>
+
+<p>As applications grow, service classes become monsters. They handle reads, writes, validation, caching, logging — everything. This is called the <strong>"Fat Service"</strong> or <strong>"God Class"</strong> anti-pattern.</p>
+
+<h3 id="real-example">Your Real Code — DepartmentService</h3>
+
+<p>Look at your current <code>DepartmentService</code>. It already has 4 injected dependencies and 5 methods:</p>
+
+<pre><code><span class="kw">public class</span> <span class="type">DepartmentService</span> : <span class="type">IDepartmentService</span>
+{
+    <span class="cmt">// ALL dependencies injected — even if a method only needs 1-2 of them</span>
+    <span class="kw">private readonly</span> <span class="type">IUnitOfWork</span> _unitOfWork;
+    <span class="kw">private readonly</span> <span class="type">IValidator</span>&lt;<span class="type">CreateDepartmentRequest</span>&gt; _createValidator;
+    <span class="kw">private readonly</span> <span class="type">IValidator</span>&lt;<span class="type">UpdateDepartmentRequest</span>&gt; _updateValidator;
+    <span class="kw">private readonly</span> <span class="type">IMemoryCache</span> _cache;
+
+    <span class="cmt">// READS — only need _unitOfWork and _cache</span>
+    <span class="kw">public async</span> Task&lt;PagedResponse&lt;DepartmentResponse&gt;&gt; <span class="fn">GetAllDepartmentsAsync</span>(...) { ... }
+    <span class="kw">public async</span> Task&lt;DepartmentResponse&gt; <span class="fn">GetDepartmentByIdAsync</span>(...) { ... }
+
+    <span class="cmt">// WRITES — only need _unitOfWork and _createValidator or _updateValidator</span>
+    <span class="kw">public async</span> Task&lt;DepartmentResponse&gt; <span class="fn">CreateDepartmentAsync</span>(...) { ... }
+    <span class="kw">public async</span> Task&lt;DepartmentResponse&gt; <span class="fn">UpdateDepartmentAsync</span>(...) { ... }
+    <span class="kw">public async</span> Task <span class="fn">DeleteDepartmentAsync</span>(...) { ... }
+}</code></pre>
+
+<div class="box box-orange">
+    <h4>What's wrong with this?</h4>
+    <p><strong>GetAllDepartmentsAsync</strong> doesn't need <code>_createValidator</code> or <code>_updateValidator</code> — but they're still injected and constructed.</p>
+    <p><strong>DeleteDepartmentAsync</strong> doesn't need <code>_cache</code> or any validator — but they're still there.</p>
+    <p>Every method pays the cost of every dependency, even the ones it doesn't use.</p>
+</div>
+
+<p>Now imagine adding more features: <code>GetByCode</code>, <code>GetActiveCount</code>, <code>BulkImport</code>, <code>MergeDepartments</code>, <code>TransferEmployees</code>... The class grows to 15+ methods with 10+ dependencies. <strong>This doesn't scale.</strong></p>
+
+<!-- ============================================================ -->
+<!-- SECTION 2: CQRS -->
+<!-- ============================================================ -->
+<h2 id="cqrs">2. CQRS — Command Query Responsibility Segregation</h2>
+
+<h3 id="what-is-cqrs">What Is CQRS?</h3>
+
+<p>CQRS is a pattern that says: <strong>split your reads and writes into separate models.</strong></p>
+
+<p>Instead of one service class handling everything, each operation becomes its own pair of classes:</p>
+
+<div class="compare">
+    <div>
+        <h4><span class="badge badge-red">Before</span> One Service</h4>
+        <pre><code>Controller
+    ↓
+DepartmentService
+    ↓
+Repository</code></pre>
+        <p style="color: var(--muted); font-size: 13px;">One class does everything. 5 methods, 4 dependencies.</p>
+    </div>
+    <div>
+        <h4><span class="badge badge-green">After</span> CQRS</h4>
+        <pre><code>Controller
+    ↓
+Command or Query
+    ↓
+Handler
+    ↓
+Repository</code></pre>
+        <p style="color: var(--muted); font-size: 13px;">Each operation is its own class. 1 method, 1-2 dependencies.</p>
+    </div>
+</div>
+
+<h3 id="commands-vs-queries">Commands vs Queries</h3>
+
+<table>
+    <thead>
+        <tr>
+            <th></th>
+            <th>Command</th>
+            <th>Query</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><strong>Purpose</strong></td>
+            <td>Change state (write)</td>
+            <td>Read state (read)</td>
+        </tr>
+        <tr>
+            <td><strong>Examples</strong></td>
+            <td>Create, Update, Delete</td>
+            <td>GetAll, GetById, Search</td>
+        </tr>
+        <tr>
+            <td><strong>Returns</strong></td>
+            <td>The created/updated object (or nothing)</td>
+            <td>Data (DTOs, lists, counts)</td>
+        </tr>
+        <tr>
+            <td><strong>Side effects</strong></td>
+            <td>Yes — changes the database</td>
+            <td>No — only reads</td>
+        </tr>
+        <tr>
+            <td><strong>Idempotent?</strong></td>
+            <td>Usually no (creating twice = 2 records)</td>
+            <td>Yes (reading twice = same result)</td>
+        </tr>
+        <tr>
+            <td><strong>Needs validation?</strong></td>
+            <td>Yes (validate input before changing state)</td>
+            <td>Rarely (maybe validate page number)</td>
+        </tr>
+    </tbody>
+</table>
+
+<h3 id="cqrs-benefits">Why It's Better</h3>
+
+<table>
+    <thead>
+        <tr>
+            <th>Benefit</th>
+            <th>Explanation</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><strong>Single Responsibility</strong></td>
+            <td>Each handler does exactly one thing. <code>CreateDepartmentHandler</code> only creates.</td>
+        </tr>
+        <tr>
+            <td><strong>Minimal dependencies</strong></td>
+            <td>Each handler injects only what it needs. No wasted resources.</td>
+        </tr>
+        <tr>
+            <td><strong>Easy to test</strong></td>
+            <td>Mock 2 dependencies instead of 10. Tests are focused and small.</td>
+        </tr>
+        <tr>
+            <td><strong>Open/Closed Principle</strong></td>
+            <td>Adding a feature = adding a new file. You never modify existing handlers.</td>
+        </tr>
+        <tr>
+            <td><strong>Separate optimization</strong></td>
+            <td>Reads can use caching, projections, read replicas. Writes can use transactions, validation. They don't interfere.</td>
+        </tr>
+        <tr>
+            <td><strong>Less merge conflicts</strong></td>
+            <td>Developers work on different files, not the same 500-line service.</td>
+        </tr>
+    </tbody>
+</table>
+
+<!-- ============================================================ -->
+<!-- SECTION 3: MEDIATR -->
+<!-- ============================================================ -->
+<h2 id="mediatr">3. MediatR — The Dispatcher</h2>
+
+<h3 id="what-is-mediatr">What Is MediatR?</h3>
+
+<p>With CQRS, we have Commands, Queries, and Handlers — but how does the controller know which handler to call? That's what <strong>MediatR</strong> does. It's a simple in-process message dispatcher.</p>
+
+<div class="flow"><span class="dim">Controller:</span>  <span class="str">"Hey MediatR, handle this GetAllDepartmentsQuery"</span>
+<span class="dim">MediatR:</span>    <span class="str">"Let me check the DI container... found GetAllDepartmentsHandler!"</span>
+<span class="dim">MediatR:</span>    <span class="arrow">→</span> <span class="label">calls handler.Handle(query)</span>
+<span class="dim">Handler:</span>    <span class="arrow">→</span> <span class="label">queries database, maps DTOs, returns result</span>
+<span class="dim">MediatR:</span>    <span class="arrow">→</span> <span class="label">returns result to controller</span></div>
+
+<div class="box box-blue">
+    <h4>How does MediatR find the right handler?</h4>
+    <p>MediatR scans the assembly at startup (just like FluentValidation scans for validators). It registers every class that implements <code>IRequestHandler&lt;TRequest, TResponse&gt;</code>. When you send a <code>GetAllDepartmentsQuery</code>, MediatR looks up which handler is registered for that type and calls it.</p>
+</div>
+
+<h3 id="irequest">IRequest&lt;T&gt; — "What I Want"</h3>
+
+<p>Every command and query implements <code>IRequest&lt;T&gt;</code> where <code>T</code> is the return type:</p>
+
+<pre><code><span class="cmt">// QUERY: "I want a paged list of departments"</span>
+<span class="kw">public class</span> <span class="type">GetAllDepartmentsQuery</span> : <span class="type">IRequest</span>&lt;<span class="type">PagedResponse</span>&lt;<span class="type">DepartmentResponse</span>&gt;&gt;
+{
+    <span class="kw">public int</span> PageNumber { <span class="kw">get</span>; <span class="kw">set</span>; } = <span class="num">1</span>;
+    <span class="kw">public int</span> PageSize { <span class="kw">get</span>; <span class="kw">set</span>; } = <span class="num">10</span>;
+    <span class="kw">public string</span>? Search { <span class="kw">get</span>; <span class="kw">set</span>; }
+}
+
+<span class="cmt">// COMMAND: "Create this department and give me the result"</span>
+<span class="kw">public class</span> <span class="type">CreateDepartmentCommand</span> : <span class="type">IRequest</span>&lt;<span class="type">DepartmentResponse</span>&gt;
+{
+    <span class="kw">public string</span> Name { <span class="kw">get</span>; <span class="kw">set</span>; }
+    <span class="kw">public string</span> Code { <span class="kw">get</span>; <span class="kw">set</span>; }
+    <span class="kw">public string</span>? Description { <span class="kw">get</span>; <span class="kw">set</span>; }
+}</code></pre>
+
+<div class="box box-green">
+    <h4>Notice the pattern</h4>
+    <p>The <strong>query</strong> carries filter/pagination params. The <strong>command</strong> carries the data to create/update. They're just DTOs with <code>IRequest&lt;T&gt;</code> added. In your current code, these are <code>DepartmentQueryRequest</code> and <code>CreateDepartmentRequest</code> — they'll become the commands and queries themselves.</p>
+</div>
+
+<h3 id="irequesthandler">IRequestHandler&lt;TRequest, TResponse&gt; — "How I Do It"</h3>
+
+<p>Each handler implements <code>IRequestHandler&lt;TRequest, TResponse&gt;</code> and has a single <code>Handle</code> method:</p>
+
+<pre><code><span class="kw">public class</span> <span class="type">GetAllDepartmentsHandler</span>
+    : <span class="type">IRequestHandler</span>&lt;<span class="type">GetAllDepartmentsQuery</span>, <span class="type">PagedResponse</span>&lt;<span class="type">DepartmentResponse</span>&gt;&gt;
+{
+    <span class="kw">private readonly</span> <span class="type">IUnitOfWork</span> _unitOfWork;
+    <span class="kw">private readonly</span> <span class="type">IMemoryCache</span> _cache;
+    <span class="cmt">// ↑ Only injects what THIS handler needs — no validators needed for a read!</span>
+
+    <span class="kw">public</span> <span class="fn">GetAllDepartmentsHandler</span>(<span class="type">IUnitOfWork</span> <span class="param">unitOfWork</span>, <span class="type">IMemoryCache</span> <span class="param">cache</span>)
+    {
+        _unitOfWork = unitOfWork;
+        _cache = cache;
+    }
+
+    <span class="kw">public async</span> Task&lt;PagedResponse&lt;DepartmentResponse&gt;&gt; <span class="fn">Handle</span>(
+        <span class="type">GetAllDepartmentsQuery</span> <span class="param">request</span>,
+        <span class="type">CancellationToken</span> <span class="param">cancellationToken</span>)
+    {
+        <span class="cmt">// Your existing GetAllDepartmentsAsync logic goes here</span>
+        <span class="cmt">// Check cache → build filters → query DB → map to DTOs → return</span>
+    }
+}</code></pre>
+
+<pre><code><span class="kw">public class</span> <span class="type">CreateDepartmentHandler</span>
+    : <span class="type">IRequestHandler</span>&lt;<span class="type">CreateDepartmentCommand</span>, <span class="type">DepartmentResponse</span>&gt;
+{
+    <span class="kw">private readonly</span> <span class="type">IUnitOfWork</span> _unitOfWork;
+    <span class="cmt">// ↑ No validator needed here — ValidationBehavior handles it automatically!</span>
+    <span class="cmt">// ↑ No cache needed here — but we DO need to invalidate (see below)</span>
+
+    <span class="kw">public</span> <span class="fn">CreateDepartmentHandler</span>(<span class="type">IUnitOfWork</span> <span class="param">unitOfWork</span>)
+    {
+        _unitOfWork = unitOfWork;
+    }
+
+    <span class="kw">public async</span> Task&lt;DepartmentResponse&gt; <span class="fn">Handle</span>(
+        <span class="type">CreateDepartmentCommand</span> <span class="param">request</span>,
+        <span class="type">CancellationToken</span> <span class="param">cancellationToken</span>)
+    {
+        <span class="cmt">// Map command → entity, save, map back → response DTO</span>
+        <span class="kw">var</span> department = request.<span class="fn">ToEntity</span>();
+        department.CreatedAt = DateTime.UtcNow;
+
+        <span class="kw">await</span> _unitOfWork.Departments.<span class="fn">AddAsync</span>(department);
+        <span class="kw">await</span> _unitOfWork.<span class="fn">SaveChangesAsync</span>();
+
+        <span class="kw">return</span> department.<span class="fn">ToResponse</span>();
+    }
+}</code></pre>
+
+<h3 id="imediator">IMediator in the Controller</h3>
+
+<p>The controller no longer injects the service. It injects <code>IMediator</code> and sends requests:</p>
+
+<pre><code><span class="attr">[ApiController]</span>
+<span class="attr">[Route("api/[controller]")]</span>
+<span class="attr">[Authorize]</span>
+<span class="kw">public class</span> <span class="type">DepartmentController</span> : <span class="type">ControllerBase</span>
+{
+    <span class="kw">private readonly</span> <span class="type">IMediator</span> _mediator;
+    <span class="cmt">// ↑ ONE dependency. That's it. Forever.</span>
+
+    <span class="kw">public</span> <span class="fn">DepartmentController</span>(<span class="type">IMediator</span> <span class="param">mediator</span>)
+    {
+        _mediator = mediator;
+    }
+
+    <span class="attr">[HttpGet]</span>
+    <span class="kw">public async</span> Task&lt;IActionResult&gt; <span class="fn">GetAll</span>(<span class="attr">[FromQuery]</span> <span class="type">GetAllDepartmentsQuery</span> <span class="param">query</span>)
+    {
+        <span class="kw">var</span> result = <span class="kw">await</span> _mediator.<span class="fn">Send</span>(query);
+        <span class="kw">return</span> <span class="fn">Ok</span>(ApiResponse&lt;PagedResponse&lt;DepartmentResponse&gt;&gt;.<span class="fn">SuccessResponse</span>(result));
+    }
+
+    <span class="attr">[HttpPost]</span>
+    <span class="attr">[Authorize(Roles = "Admin")]</span>
+    <span class="kw">public async</span> Task&lt;IActionResult&gt; <span class="fn">Create</span>(<span class="attr">[FromBody]</span> <span class="type">CreateDepartmentCommand</span> <span class="param">command</span>)
+    {
+        <span class="kw">var</span> result = <span class="kw">await</span> _mediator.<span class="fn">Send</span>(command);
+        <span class="kw">return</span> <span class="fn">CreatedAtAction</span>(<span class="kw">nameof</span>(GetById), <span class="kw">new</span> { id = result.Id },
+            ApiResponse&lt;DepartmentResponse&gt;.<span class="fn">SuccessResponse</span>(result, <span class="str">"Department created."</span>));
+    }
+}</code></pre>
+
+<div class="box box-green">
+    <h4>The controller is now even thinner</h4>
+    <p>It doesn't know about services, validators, caches, or repositories. It only knows MediatR. Adding a new endpoint = one new <code>_mediator.Send()</code> call + a new Command/Query + Handler in a separate file. The controller barely changes.</p>
+</div>
+
+<h3 id="full-flow">Full Request Flow</h3>
+
+<p>Let's trace a complete request from HTTP to database and back:</p>
+
+<div class="flow"><span class="num">1.</span> Client sends <span class="str">POST /api/department</span> with body <span class="str">{ "name": "HR", "code": "HR01" }</span>
+
+<span class="num">2.</span> ASP.NET routing <span class="arrow">→</span> <span class="label">DepartmentController.Create()</span>
+   <span class="dim">Model binding creates CreateDepartmentCommand from JSON body</span>
+
+<span class="num">3.</span> Controller calls <span class="label">_mediator.Send(command)</span>
+   <span class="dim">Controller's job is done — it just sends and wraps the response</span>
+
+<span class="num">4.</span> MediatR checks DI: <span class="str">"Who handles CreateDepartmentCommand?"</span>
+   <span class="arrow">→</span> Finds <span class="label">CreateDepartmentHandler</span>
+
+<span class="num">5.</span> MediatR runs Pipeline Behaviors (if any):
+   <span class="arrow">→</span> <span class="label">LoggingBehavior</span> logs <span class="str">"Handling CreateDepartmentCommand"</span>
+   <span class="arrow">→</span> <span class="label">ValidationBehavior</span> finds CreateDepartmentValidator, validates
+      <span class="dim">If invalid → throws ValidationException → middleware returns 422</span>
+
+<span class="num">6.</span> MediatR calls <span class="label">handler.Handle(command, cancellationToken)</span>
+
+<span class="num">7.</span> Handler:
+   <span class="arrow">→</span> Maps command to Department entity
+   <span class="arrow">→</span> Sets CreatedAt
+   <span class="arrow">→</span> Calls _unitOfWork.Departments.AddAsync()
+   <span class="arrow">→</span> Calls _unitOfWork.SaveChangesAsync() <span class="dim">← actual SQL INSERT</span>
+   <span class="arrow">→</span> Maps entity back to DepartmentResponse
+   <span class="arrow">→</span> Returns DepartmentResponse
+
+<span class="num">8.</span> <span class="label">LoggingBehavior</span> logs <span class="str">"Handled CreateDepartmentCommand in 42ms"</span>
+
+<span class="num">9.</span> MediatR returns result to controller
+
+<span class="num">10.</span> Controller wraps in <span class="label">ApiResponse&lt;T&gt;.SuccessResponse()</span>
+    <span class="arrow">→</span> Returns <span class="str">201 Created</span> with Location header</div>
+
+<!-- ============================================================ -->
+<!-- SECTION 4: BUILDING IT -->
+<!-- ============================================================ -->
+<h2 id="building">4. Building It Step by Step</h2>
+
+<div class="step" id="step1-install">
+    <div class="step-num">1</div>
+    <div class="step-content">
+        <h4>Install MediatR</h4>
+<pre><code><span class="cmt"># In the Application project (where handlers live)</span>
+dotnet add package MediatR
+dotnet add package MediatR.Extensions.Microsoft.DependencyInjection</code></pre>
+        <p>Then register in <code>DependencyInjection.cs</code>:</p>
+<pre><code><span class="kw">public static</span> <span class="type">IServiceCollection</span> <span class="fn">AddApplication</span>(<span class="kw">this</span> <span class="type">IServiceCollection</span> <span class="param">services</span>)
+{
+    services.<span class="fn">AddMediatR</span>(cfg =>
+        cfg.<span class="fn">RegisterServicesFromAssembly</span>(<span class="kw">typeof</span>(DependencyInjection).Assembly));
+
+    services.<span class="fn">AddValidatorsFromAssembly</span>(<span class="kw">typeof</span>(DependencyInjection).Assembly);
+
+    <span class="cmt">// No more service registrations needed!</span>
+    <span class="cmt">// services.AddScoped&lt;IDepartmentService, DepartmentService&gt;();  ← GONE</span>
+
+    <span class="kw">return</span> services;
+}</code></pre>
+        <p><code>RegisterServicesFromAssembly</code> scans for all <code>IRequestHandler</code> implementations — just like <code>AddValidatorsFromAssembly</code> scans for validators.</p>
+    </div>
+</div>
+
+<div class="step" id="step2-query">
+    <div class="step-num">2</div>
+    <div class="step-content">
+        <h4>Create Your First Query</h4>
+        <p>Create a folder: <code>Features/Departments/Queries/GetAllDepartments/</code></p>
+
+        <p><strong>GetAllDepartmentsQuery.cs:</strong></p>
+<pre><code><span class="kw">using</span> MediatR;
+
+<span class="kw">public class</span> <span class="type">GetAllDepartmentsQuery</span> : <span class="type">IRequest</span>&lt;<span class="type">PagedResponse</span>&lt;<span class="type">DepartmentResponse</span>&gt;&gt;
+{
+    <span class="kw">public int</span> PageNumber { <span class="kw">get</span>; <span class="kw">set</span>; } = <span class="num">1</span>;
+    <span class="kw">public int</span> PageSize { <span class="kw">get</span>; <span class="kw">set</span>; } = <span class="num">10</span>;
+    <span class="kw">public string</span>? Search { <span class="kw">get</span>; <span class="kw">set</span>; }
+    <span class="kw">public bool</span>? IsActive { <span class="kw">get</span>; <span class="kw">set</span>; }
+    <span class="kw">public string</span>? SortBy { <span class="kw">get</span>; <span class="kw">set</span>; }
+    <span class="kw">public bool</span> SortDescending { <span class="kw">get</span>; <span class="kw">set</span>; }
+}</code></pre>
+
+        <p><strong>GetAllDepartmentsHandler.cs:</strong></p>
+<pre><code><span class="kw">public class</span> <span class="type">GetAllDepartmentsHandler</span>
+    : <span class="type">IRequestHandler</span>&lt;<span class="type">GetAllDepartmentsQuery</span>, <span class="type">PagedResponse</span>&lt;<span class="type">DepartmentResponse</span>&gt;&gt;
+{
+    <span class="kw">private readonly</span> <span class="type">IUnitOfWork</span> _unitOfWork;
+
+    <span class="kw">public</span> <span class="fn">GetAllDepartmentsHandler</span>(<span class="type">IUnitOfWork</span> <span class="param">unitOfWork</span>)
+    {
+        _unitOfWork = unitOfWork;
+    }
+
+    <span class="kw">public async</span> Task&lt;PagedResponse&lt;DepartmentResponse&gt;&gt; <span class="fn">Handle</span>(
+        <span class="type">GetAllDepartmentsQuery</span> <span class="param">request</span>,
+        <span class="type">CancellationToken</span> <span class="param">cancellationToken</span>)
+    {
+        <span class="kw">var</span> filters = <span class="kw">new</span> List&lt;Expression&lt;Func&lt;Department, <span class="kw">bool</span>&gt;&gt;&gt;();
+
+        filters.<span class="fn">Add</span>(d => d.IsActive == (request.IsActive ?? <span class="kw">true</span>));
+
+        <span class="kw">if</span> (!<span class="kw">string</span>.<span class="fn">IsNullOrWhiteSpace</span>(request.Search))
+        {
+            <span class="kw">var</span> search = request.Search.<span class="fn">ToLower</span>();
+            filters.<span class="fn">Add</span>(d => d.Name.<span class="fn">ToLower</span>().<span class="fn">Contains</span>(search)
+                           || d.Code.<span class="fn">ToLower</span>().<span class="fn">Contains</span>(search));
+        }
+
+        <span class="kw">var</span> pagedRequest = <span class="kw">new</span> <span class="type">PagedRequest</span>
+        {
+            PageNumber = request.PageNumber,
+            PageSize = request.PageSize,
+            SortBy = request.SortBy,
+            SortDescending = request.SortDescending
+        };
+
+        <span class="kw">var</span> paged = <span class="kw">await</span> _unitOfWork.Departments.<span class="fn">GetPagedAsync</span>(pagedRequest, filters);
+
+        <span class="kw">return new</span> <span class="type">PagedResponse</span>&lt;<span class="type">DepartmentResponse</span>&gt;
+        {
+            Items = paged.Items.<span class="fn">Select</span>(d => d.<span class="fn">ToResponse</span>()).<span class="fn">ToList</span>(),
+            PageNumber = paged.PageNumber,
+            PageSize = paged.PageSize,
+            TotalCount = paged.TotalCount
+        };
+    }
+}</code></pre>
+    </div>
+</div>
+
+<div class="step" id="step3-command">
+    <div class="step-num">3</div>
+    <div class="step-content">
+        <h4>Create Your First Command</h4>
+        <p>Create a folder: <code>Features/Departments/Commands/CreateDepartment/</code></p>
+
+        <p><strong>CreateDepartmentCommand.cs:</strong></p>
+<pre><code><span class="kw">public class</span> <span class="type">CreateDepartmentCommand</span> : <span class="type">IRequest</span>&lt;<span class="type">DepartmentResponse</span>&gt;
+{
+    <span class="kw">public string</span> Name { <span class="kw">get</span>; <span class="kw">set</span>; }
+    <span class="kw">public string</span> Code { <span class="kw">get</span>; <span class="kw">set</span>; }
+    <span class="kw">public string</span>? Description { <span class="kw">get</span>; <span class="kw">set</span>; }
+}
+<span class="cmt">// ↑ This replaces CreateDepartmentRequest</span>
+<span class="cmt">// Same properties, but now it implements IRequest&lt;T&gt;</span></code></pre>
+
+        <p><strong>CreateDepartmentHandler.cs:</strong></p>
+<pre><code><span class="kw">public class</span> <span class="type">CreateDepartmentHandler</span>
+    : <span class="type">IRequestHandler</span>&lt;<span class="type">CreateDepartmentCommand</span>, <span class="type">DepartmentResponse</span>&gt;
+{
+    <span class="kw">private readonly</span> <span class="type">IUnitOfWork</span> _unitOfWork;
+
+    <span class="kw">public</span> <span class="fn">CreateDepartmentHandler</span>(<span class="type">IUnitOfWork</span> <span class="param">unitOfWork</span>)
+    {
+        _unitOfWork = unitOfWork;
+    }
+
+    <span class="kw">public async</span> Task&lt;DepartmentResponse&gt; <span class="fn">Handle</span>(
+        <span class="type">CreateDepartmentCommand</span> <span class="param">request</span>,
+        <span class="type">CancellationToken</span> <span class="param">cancellationToken</span>)
+    {
+        <span class="cmt">// No validation here — the ValidationBehavior handles it!</span>
+
+        <span class="kw">var</span> department = <span class="kw">new</span> <span class="type">Department</span>
+        {
+            Name = request.Name,
+            Code = request.Code,
+            Description = request.Description,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        <span class="kw">await</span> _unitOfWork.Departments.<span class="fn">AddAsync</span>(department);
+        <span class="kw">await</span> _unitOfWork.<span class="fn">SaveChangesAsync</span>();
+
+        <span class="kw">return</span> department.<span class="fn">ToResponse</span>();
+    }
+}</code></pre>
+    </div>
+</div>
+
+<div class="step" id="step4-controller">
+    <div class="step-num">4</div>
+    <div class="step-content">
+        <h4>Refactor the Controller</h4>
+<pre><code><span class="kw">public class</span> <span class="type">DepartmentController</span> : <span class="type">ControllerBase</span>
+{
+    <span class="kw">private readonly</span> <span class="type">IMediator</span> _mediator;
+    <span class="cmt">// ↑ Replaces IDepartmentService. ONE dependency, always.</span>
+
+    <span class="kw">public</span> <span class="fn">DepartmentController</span>(<span class="type">IMediator</span> <span class="param">mediator</span>) => _mediator = mediator;
+
+    <span class="attr">[HttpGet]</span>
+    <span class="kw">public async</span> Task&lt;IActionResult&gt; <span class="fn">GetAll</span>(<span class="attr">[FromQuery]</span> <span class="type">GetAllDepartmentsQuery</span> <span class="param">query</span>)
+    {
+        <span class="kw">var</span> result = <span class="kw">await</span> _mediator.<span class="fn">Send</span>(query);
+        <span class="kw">return</span> <span class="fn">Ok</span>(ApiResponse&lt;PagedResponse&lt;DepartmentResponse&gt;&gt;.<span class="fn">SuccessResponse</span>(result));
+    }
+
+    <span class="attr">[HttpGet("{id}")]</span>
+    <span class="kw">public async</span> Task&lt;IActionResult&gt; <span class="fn">GetById</span>(<span class="kw">int</span> <span class="param">id</span>)
+    {
+        <span class="kw">var</span> result = <span class="kw">await</span> _mediator.<span class="fn">Send</span>(<span class="kw">new</span> <span class="type">GetDepartmentByIdQuery</span> { Id = id });
+        <span class="kw">return</span> <span class="fn">Ok</span>(ApiResponse&lt;DepartmentResponse&gt;.<span class="fn">SuccessResponse</span>(result));
+    }
+
+    <span class="attr">[HttpPost]</span>
+    <span class="attr">[Authorize(Roles = "Admin")]</span>
+    <span class="kw">public async</span> Task&lt;IActionResult&gt; <span class="fn">Create</span>(<span class="attr">[FromBody]</span> <span class="type">CreateDepartmentCommand</span> <span class="param">command</span>)
+    {
+        <span class="kw">var</span> result = <span class="kw">await</span> _mediator.<span class="fn">Send</span>(command);
+        <span class="kw">return</span> <span class="fn">CreatedAtAction</span>(<span class="kw">nameof</span>(GetById), <span class="kw">new</span> { id = result.Id },
+            ApiResponse&lt;DepartmentResponse&gt;.<span class="fn">SuccessResponse</span>(result, <span class="str">"Department created."</span>));
+    }
+
+    <span class="attr">[HttpPut("{id}")]</span>
+    <span class="attr">[Authorize(Roles = "Admin")]</span>
+    <span class="kw">public async</span> Task&lt;IActionResult&gt; <span class="fn">Update</span>(<span class="kw">int</span> <span class="param">id</span>, <span class="attr">[FromBody]</span> <span class="type">UpdateDepartmentCommand</span> <span class="param">command</span>)
+    {
+        command.Id = id;
+        <span class="kw">var</span> result = <span class="kw">await</span> _mediator.<span class="fn">Send</span>(command);
+        <span class="kw">return</span> <span class="fn">Ok</span>(ApiResponse&lt;DepartmentResponse&gt;.<span class="fn">SuccessResponse</span>(result, <span class="str">"Updated."</span>));
+    }
+
+    <span class="attr">[HttpDelete("{id}")]</span>
+    <span class="attr">[Authorize(Roles = "Admin")]</span>
+    <span class="kw">public async</span> Task&lt;IActionResult&gt; <span class="fn">Delete</span>(<span class="kw">int</span> <span class="param">id</span>)
+    {
+        <span class="kw">await</span> _mediator.<span class="fn">Send</span>(<span class="kw">new</span> <span class="type">DeleteDepartmentCommand</span> { Id = id });
+        <span class="kw">return</span> <span class="fn">Ok</span>(ApiResponse&lt;<span class="kw">object</span>&gt;.<span class="fn">SuccessResponse</span>(<span class="kw">null</span>!, <span class="str">"Deleted."</span>));
+    }
+}</code></pre>
+    </div>
+</div>
+
+<div class="step" id="step5-folder">
+    <div class="step-num">5</div>
+    <div class="step-content">
+        <h4>Organize by Feature</h4>
+<pre><code>EMS_Application/
+├── Features/
+│   ├── Departments/
+│   │   ├── Commands/
+│   │   │   ├── CreateDepartment/
+│   │   │   │   ├── CreateDepartmentCommand.cs     <span class="cmt">← IRequest&lt;DepartmentResponse&gt;</span>
+│   │   │   │   ├── CreateDepartmentHandler.cs     <span class="cmt">← IRequestHandler</span>
+│   │   │   │   └── CreateDepartmentValidator.cs   <span class="cmt">← AbstractValidator (same as before)</span>
+│   │   │   ├── UpdateDepartment/
+│   │   │   │   ├── UpdateDepartmentCommand.cs
+│   │   │   │   ├── UpdateDepartmentHandler.cs
+│   │   │   │   └── UpdateDepartmentValidator.cs
+│   │   │   └── DeleteDepartment/
+│   │   │       ├── DeleteDepartmentCommand.cs
+│   │   │       └── DeleteDepartmentHandler.cs     <span class="cmt">← no validator needed for delete</span>
+│   │   └── Queries/
+│   │       ├── GetAllDepartments/
+│   │       │   ├── GetAllDepartmentsQuery.cs
+│   │       │   └── GetAllDepartmentsHandler.cs
+│   │       └── GetDepartmentById/
+│   │           ├── GetDepartmentByIdQuery.cs
+│   │           └── GetDepartmentByIdHandler.cs
+│   ├── Employees/
+│   │   ├── Commands/...
+│   │   └── Queries/...
+│   └── Auth/
+│       └── Commands/...                           <span class="cmt">← Register, Login, Refresh are all commands</span>
+├── Behaviors/
+│   ├── ValidationBehavior.cs
+│   └── LoggingBehavior.cs
+├── Common/
+│   ├── ApiResponse.cs
+│   ├── PagedRequest.cs
+│   ├── PagedResponse.cs
+│   └── ...
+└── DependencyInjection.cs</code></pre>
+    </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SECTION 5: PIPELINE BEHAVIORS -->
+<!-- ============================================================ -->
+<h2 id="behaviors">5. Pipeline Behaviors — MediatR's Middleware</h2>
+
+<h3 id="what-are-behaviors">What Are They?</h3>
+
+<p>Pipeline Behaviors are to MediatR what Middleware is to the HTTP pipeline. They wrap <strong>every</strong> request that passes through MediatR.</p>
+
+<div class="compare">
+    <div>
+        <h4 style="color: var(--cyan);">HTTP Middleware</h4>
+<pre><code>HTTP Request
+  → ExceptionMiddleware
+    → AuthMiddleware
+      → Controller
+    ← AuthMiddleware
+  ← ExceptionMiddleware
+HTTP Response</code></pre>
+    </div>
+    <div>
+        <h4 style="color: var(--purple);">MediatR Behaviors</h4>
+<pre><code>_mediator.Send(request)
+  → LoggingBehavior
+    → ValidationBehavior
+      → Handler
+    ← ValidationBehavior
+  ← LoggingBehavior
+return result</code></pre>
+    </div>
+</div>
+
+<h3 id="validation-behavior">Validation Behavior — Automatic Validation</h3>
+
+<p>Remember how every service method starts with this?</p>
+
+<pre><code><span class="cmt">// You copy-paste this in EVERY Create/Update method:</span>
+<span class="kw">var</span> validationResult = <span class="kw">await</span> _validator.<span class="fn">ValidateAsync</span>(request);
+<span class="kw">if</span> (!validationResult.IsValid)
+    <span class="kw">throw new</span> <span class="type">ValidationException</span>(validationResult.<span class="fn">ToErrorDictionary</span>());</code></pre>
+
+<p>With a ValidationBehavior, you write it <strong>once</strong> and it runs automatically for every request that has a matching validator:</p>
+
+<pre><code><span class="kw">using</span> FluentValidation;
+<span class="kw">using</span> MediatR;
+
+<span class="kw">public class</span> <span class="type">ValidationBehavior</span>&lt;<span class="type">TRequest</span>, <span class="type">TResponse</span>&gt;
+    : <span class="type">IPipelineBehavior</span>&lt;<span class="type">TRequest</span>, <span class="type">TResponse</span>&gt;
+    <span class="kw">where</span> <span class="type">TRequest</span> : <span class="kw">notnull</span>
+{
+    <span class="kw">private readonly</span> <span class="type">IEnumerable</span>&lt;<span class="type">IValidator</span>&lt;<span class="type">TRequest</span>&gt;&gt; _validators;
+
+    <span class="kw">public</span> <span class="fn">ValidationBehavior</span>(<span class="type">IEnumerable</span>&lt;<span class="type">IValidator</span>&lt;<span class="type">TRequest</span>&gt;&gt; <span class="param">validators</span>)
+    {
+        _validators = validators;
+    }
+
+    <span class="kw">public async</span> Task&lt;<span class="type">TResponse</span>&gt; <span class="fn">Handle</span>(
+        <span class="type">TRequest</span> <span class="param">request</span>,
+        <span class="type">RequestHandlerDelegate</span>&lt;<span class="type">TResponse</span>&gt; <span class="param">next</span>,   <span class="cmt">// ← like _next(context) in middleware</span>
+        <span class="type">CancellationToken</span> <span class="param">cancellationToken</span>)
+    {
+        <span class="kw">if</span> (!_validators.<span class="fn">Any</span>())
+            <span class="kw">return await</span> <span class="fn">next</span>();   <span class="cmt">// No validator registered for this type → skip</span>
+
+        <span class="kw">var</span> context = <span class="kw">new</span> <span class="type">ValidationContext</span>&lt;<span class="type">TRequest</span>&gt;(request);
+
+        <span class="kw">var</span> failures = _validators
+            .<span class="fn">Select</span>(v => v.<span class="fn">Validate</span>(context))
+            .<span class="fn">SelectMany</span>(result => result.Errors)
+            .<span class="fn">Where</span>(f => f != <span class="kw">null</span>)
+            .<span class="fn">ToList</span>();
+
+        <span class="kw">if</span> (failures.<span class="fn">Any</span>())
+        {
+            <span class="kw">var</span> errors = failures
+                .<span class="fn">GroupBy</span>(f => f.PropertyName)
+                .<span class="fn">ToDictionary</span>(
+                    g => g.Key,
+                    g => g.<span class="fn">Select</span>(f => f.ErrorMessage).<span class="fn">ToArray</span>());
+
+            <span class="kw">throw new</span> <span class="type">ValidationException</span>(errors);
+        }
+
+        <span class="kw">return await</span> <span class="fn">next</span>();   <span class="cmt">// Validation passed → call the actual handler</span>
+    }
+}</code></pre>
+
+<div class="box box-green">
+    <h4>How this works</h4>
+    <ul>
+        <li>MediatR calls this behavior <strong>before</strong> every handler</li>
+        <li>DI injects <code>IEnumerable&lt;IValidator&lt;TRequest&gt;&gt;</code> — if there's a <code>CreateDepartmentValidator</code> registered and the request is <code>CreateDepartmentCommand</code>, it gets injected</li>
+        <li>If there's no validator for this request type, the <code>IEnumerable</code> is empty → skips validation</li>
+        <li><code>next()</code> is like <code>await _next(context)</code> in HTTP middleware — it calls the next behavior or the handler</li>
+        <li>If validation fails, it throws <strong>before</strong> the handler runs — same as your current service code, but without any handler needing to know about validation</li>
+    </ul>
+</div>
+
+<h3 id="logging-behavior">Logging Behavior — Automatic Request Logging</h3>
+
+<pre><code><span class="kw">public class</span> <span class="type">LoggingBehavior</span>&lt;<span class="type">TRequest</span>, <span class="type">TResponse</span>&gt;
+    : <span class="type">IPipelineBehavior</span>&lt;<span class="type">TRequest</span>, <span class="type">TResponse</span>&gt;
+    <span class="kw">where</span> <span class="type">TRequest</span> : <span class="kw">notnull</span>
+{
+    <span class="kw">private readonly</span> <span class="type">ILogger</span>&lt;<span class="type">LoggingBehavior</span>&lt;<span class="type">TRequest</span>, <span class="type">TResponse</span>&gt;&gt; _logger;
+
+    <span class="kw">public</span> <span class="fn">LoggingBehavior</span>(<span class="type">ILogger</span>&lt;<span class="type">LoggingBehavior</span>&lt;<span class="type">TRequest</span>, <span class="type">TResponse</span>&gt;&gt; <span class="param">logger</span>)
+    {
+        _logger = logger;
+    }
+
+    <span class="kw">public async</span> Task&lt;<span class="type">TResponse</span>&gt; <span class="fn">Handle</span>(
+        <span class="type">TRequest</span> <span class="param">request</span>,
+        <span class="type">RequestHandlerDelegate</span>&lt;<span class="type">TResponse</span>&gt; <span class="param">next</span>,
+        <span class="type">CancellationToken</span> <span class="param">cancellationToken</span>)
+    {
+        <span class="kw">var</span> requestName = <span class="kw">typeof</span>(<span class="type">TRequest</span>).Name;
+
+        _logger.<span class="fn">LogInformation</span>(<span class="str">"Handling {RequestName}"</span>, requestName);
+
+        <span class="kw">var</span> stopwatch = Stopwatch.<span class="fn">StartNew</span>();
+        <span class="kw">var</span> response = <span class="kw">await</span> <span class="fn">next</span>();
+        stopwatch.<span class="fn">Stop</span>();
+
+        _logger.<span class="fn">LogInformation</span>(<span class="str">"Handled {RequestName} in {ElapsedMs}ms"</span>,
+            requestName, stopwatch.ElapsedMilliseconds);
+
+        <span class="kw">return</span> response;
+    }
+}</code></pre>
+
+<p>Now every request is automatically logged with timing:</p>
+<pre><code><span class="cmt">// Output:
+// [INF] Handling CreateDepartmentCommand
+// [INF] Handled CreateDepartmentCommand in 42ms
+// [INF] Handling GetAllDepartmentsQuery
+// [INF] Handled GetAllDepartmentsQuery in 8ms</span></code></pre>
+
+<h3 id="behavior-registration">Registering Behaviors</h3>
+
+<pre><code>services.<span class="fn">AddMediatR</span>(cfg =>
+{
+    cfg.<span class="fn">RegisterServicesFromAssembly</span>(<span class="kw">typeof</span>(DependencyInjection).Assembly);
+
+    <span class="cmt">// Pipeline behaviors — order matters!</span>
+    cfg.<span class="fn">AddBehavior</span>(<span class="kw">typeof</span>(<span class="type">LoggingBehavior</span>&lt;,&gt;));
+    cfg.<span class="fn">AddBehavior</span>(<span class="kw">typeof</span>(<span class="type">ValidationBehavior</span>&lt;,&gt;));
+});</code></pre>
+
+<h3 id="behavior-order">Execution Order</h3>
+
+<p>Behaviors execute in the order they're registered — outermost first:</p>
+
+<div class="flow"><span class="label">Request arrives</span>
+  <span class="arrow">→</span> <span class="type">LoggingBehavior</span>     <span class="dim">(logs "Handling...")</span>
+    <span class="arrow">→</span> <span class="type">ValidationBehavior</span>  <span class="dim">(validates, throws if invalid)</span>
+      <span class="arrow">→</span> <span class="type">Handler</span>            <span class="dim">(does the actual work)</span>
+    <span class="arrow">←</span> <span class="type">ValidationBehavior</span>
+  <span class="arrow">←</span> <span class="type">LoggingBehavior</span>     <span class="dim">(logs "Handled in Xms")</span>
+<span class="label">Response returned</span></div>
+
+<div class="box box-orange">
+    <h4>Why Logging before Validation?</h4>
+    <p>If validation fails, the <code>LoggingBehavior</code> will still log the request name — so you know someone tried to create a department with invalid data. If Logging was after Validation, you'd never see failed attempts in your logs.</p>
+</div>
+
+<!-- ============================================================ -->
+<!-- SECTION 6: ADVANCED -->
+<!-- ============================================================ -->
+<h2 id="advanced">6. Advanced Patterns</h2>
+
+<h3 id="notifications">Notifications — One Event, Many Handlers</h3>
+
+<p><code>IRequest</code> is one-to-one: one request, one handler. <code>INotification</code> is one-to-many: one event, multiple handlers react to it.</p>
+
+<pre><code><span class="cmt">// The event</span>
+<span class="kw">public class</span> <span class="type">DepartmentCreatedNotification</span> : <span class="type">INotification</span>
+{
+    <span class="kw">public int</span> DepartmentId { <span class="kw">get</span>; <span class="kw">set</span>; }
+    <span class="kw">public string</span> Name { <span class="kw">get</span>; <span class="kw">set</span>; }
+}
+
+<span class="cmt">// Handler 1: Invalidate cache</span>
+<span class="kw">public class</span> <span class="type">InvalidateCacheHandler</span>
+    : <span class="type">INotificationHandler</span>&lt;<span class="type">DepartmentCreatedNotification</span>&gt;
+{
+    <span class="kw">public</span> Task <span class="fn">Handle</span>(<span class="type">DepartmentCreatedNotification</span> <span class="param">notification</span>, <span class="type">CancellationToken</span> <span class="param">ct</span>)
+    {
+        <span class="cmt">// Clear department cache</span>
+        <span class="kw">return</span> Task.CompletedTask;
+    }
+}
+
+<span class="cmt">// Handler 2: Send email notification</span>
+<span class="kw">public class</span> <span class="type">SendEmailHandler</span>
+    : <span class="type">INotificationHandler</span>&lt;<span class="type">DepartmentCreatedNotification</span>&gt;
+{
+    <span class="kw">public</span> Task <span class="fn">Handle</span>(<span class="type">DepartmentCreatedNotification</span> <span class="param">notification</span>, <span class="type">CancellationToken</span> <span class="param">ct</span>)
+    {
+        <span class="cmt">// Send email to admin about new department</span>
+        <span class="kw">return</span> Task.CompletedTask;
+    }
+}
+
+<span class="cmt">// Publishing (in the CreateDepartmentHandler):</span>
+<span class="kw">await</span> _mediator.<span class="fn">Publish</span>(<span class="kw">new</span> <span class="type">DepartmentCreatedNotification</span>
+{
+    DepartmentId = department.Id,
+    Name = department.Name
+});</code></pre>
+
+<div class="box box-blue">
+    <h4>Send vs Publish</h4>
+    <table>
+        <tr>
+            <th></th>
+            <th><code>_mediator.Send()</code></th>
+            <th><code>_mediator.Publish()</code></th>
+        </tr>
+        <tr>
+            <td>Interface</td>
+            <td><code>IRequest&lt;T&gt;</code></td>
+            <td><code>INotification</code></td>
+        </tr>
+        <tr>
+            <td>Handlers</td>
+            <td>Exactly 1</td>
+            <td>0 or more</td>
+        </tr>
+        <tr>
+            <td>Returns</td>
+            <td>A result</td>
+            <td>Nothing (void)</td>
+        </tr>
+        <tr>
+            <td>Use for</td>
+            <td>Commands & Queries</td>
+            <td>Domain Events (side effects)</td>
+        </tr>
+    </table>
+</div>
+
+<h3 id="void-commands">Commands Without Return Value</h3>
+
+<p>Delete doesn't return anything. Use <code>IRequest</code> (without generic parameter) or <code>IRequest&lt;Unit&gt;</code>:</p>
+
+<pre><code><span class="kw">public class</span> <span class="type">DeleteDepartmentCommand</span> : <span class="type">IRequest</span>
+{
+    <span class="kw">public int</span> Id { <span class="kw">get</span>; <span class="kw">set</span>; }
+}
+
+<span class="kw">public class</span> <span class="type">DeleteDepartmentHandler</span> : <span class="type">IRequestHandler</span>&lt;<span class="type">DeleteDepartmentCommand</span>&gt;
+{
+    <span class="kw">public async</span> Task <span class="fn">Handle</span>(
+        <span class="type">DeleteDepartmentCommand</span> <span class="param">request</span>,
+        <span class="type">CancellationToken</span> <span class="param">cancellationToken</span>)
+    {
+        <span class="kw">var</span> dept = <span class="kw">await</span> _unitOfWork.Departments.<span class="fn">FindAsync</span>(d => d.Id == request.Id && d.IsActive);
+        <span class="kw">if</span> (dept <span class="kw">is null</span>) <span class="kw">throw new</span> <span class="type">NotFoundException</span>(<span class="str">"Department"</span>, request.Id);
+
+        dept.IsActive = <span class="kw">false</span>;
+        dept.UpdatedAt = DateTime.UtcNow;
+        _unitOfWork.Departments.<span class="fn">Update</span>(dept);
+        <span class="kw">await</span> _unitOfWork.<span class="fn">SaveChangesAsync</span>();
+    }
+}</code></pre>
+
+<h3 id="cancellation-tokens">CancellationToken</h3>
+
+<p>Every handler receives a <code>CancellationToken</code>. This lets the operation be cancelled if the client disconnects:</p>
+
+<pre><code><span class="kw">public async</span> Task&lt;PagedResponse&lt;DepartmentResponse&gt;&gt; <span class="fn">Handle</span>(
+    <span class="type">GetAllDepartmentsQuery</span> <span class="param">request</span>,
+    <span class="type">CancellationToken</span> <span class="param">cancellationToken</span>)  <span class="cmt">← MediatR passes this</span>
+{
+    <span class="cmt">// Pass it to async EF Core calls:</span>
+    <span class="kw">var</span> count = <span class="kw">await</span> query.<span class="fn">CountAsync</span>(cancellationToken);
+    <span class="kw">var</span> items = <span class="kw">await</span> query.<span class="fn">ToListAsync</span>(cancellationToken);
+    <span class="cmt">// If the client disconnects, these calls are cancelled → no wasted DB work</span>
+}</code></pre>
+
+<!-- ============================================================ -->
+<!-- SECTION 7: YOUR PROJECT -->
+<!-- ============================================================ -->
+<h2 id="your-project">7. In Your EMS Project — Before vs After</h2>
+
+<h3 id="ems-before-after">Side by Side Comparison</h3>
+
+<div class="compare">
+    <div>
+        <h4><span class="badge badge-red">Current (M4)</span></h4>
+        <ul>
+            <li><code>IDepartmentService</code> interface</li>
+            <li><code>DepartmentService</code> (5 methods, 4 deps)</li>
+            <li><code>CreateDepartmentRequest</code> DTO</li>
+            <li><code>DepartmentQueryRequest</code> DTO</li>
+            <li><code>CreateDepartmentValidator</code></li>
+            <li>Controller injects <code>IDepartmentService</code></li>
+        </ul>
+    </div>
+    <div>
+        <h4><span class="badge badge-green">After (M5)</span></h4>
+        <ul>
+            <li><code>CreateDepartmentCommand</code> (= IRequest)</li>
+            <li><code>CreateDepartmentHandler</code> (1 method, 1-2 deps)</li>
+            <li><code>GetAllDepartmentsQuery</code> (= IRequest)</li>
+            <li><code>GetAllDepartmentsHandler</code> (1 method, 1-2 deps)</li>
+            <li><code>CreateDepartmentValidator</code> (same, unchanged!)</li>
+            <li>Controller injects <code>IMediator</code></li>
+        </ul>
+    </div>
+</div>
+
+<h3 id="ems-departments">Departments — All Operations</h3>
+
+<table>
+    <thead>
+        <tr>
+            <th>HTTP</th>
+            <th>Current (Service Method)</th>
+            <th>After (Command/Query)</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td>GET /api/department</td>
+            <td><code>GetAllDepartmentsAsync(query)</code></td>
+            <td><code>GetAllDepartmentsQuery</code> + Handler</td>
+        </tr>
+        <tr>
+            <td>GET /api/department/{id}</td>
+            <td><code>GetDepartmentByIdAsync(id)</code></td>
+            <td><code>GetDepartmentByIdQuery</code> + Handler</td>
+        </tr>
+        <tr>
+            <td>POST /api/department</td>
+            <td><code>CreateDepartmentAsync(req)</code></td>
+            <td><code>CreateDepartmentCommand</code> + Handler</td>
+        </tr>
+        <tr>
+            <td>PUT /api/department/{id}</td>
+            <td><code>UpdateDepartmentAsync(id, req)</code></td>
+            <td><code>UpdateDepartmentCommand</code> + Handler</td>
+        </tr>
+        <tr>
+            <td>DELETE /api/department/{id}</td>
+            <td><code>DeleteDepartmentAsync(id)</code></td>
+            <td><code>DeleteDepartmentCommand</code> + Handler</td>
+        </tr>
+    </tbody>
+</table>
+
+<h3 id="ems-employees">Employees — Same Pattern</h3>
+
+<table>
+    <thead>
+        <tr>
+            <th>HTTP</th>
+            <th>Command/Query</th>
+            <th>Notes</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td>GET /api/employee</td>
+            <td><code>GetAllEmployeesQuery</code></td>
+            <td>Includes Department in query (for DepartmentName)</td>
+        </tr>
+        <tr>
+            <td>GET /api/employee/{id}</td>
+            <td><code>GetEmployeeByIdQuery</code></td>
+            <td>Same</td>
+        </tr>
+        <tr>
+            <td>POST /api/employee</td>
+            <td><code>CreateEmployeeCommand</code></td>
+            <td>Validator checks DepartmentId exists</td>
+        </tr>
+        <tr>
+            <td>PUT /api/employee/{id}</td>
+            <td><code>UpdateEmployeeCommand</code></td>
+            <td>Has Id property for the URL param</td>
+        </tr>
+        <tr>
+            <td>DELETE /api/employee/{id}</td>
+            <td><code>DeleteEmployeeCommand</code></td>
+            <td>Soft delete (IsActive = false)</td>
+        </tr>
+    </tbody>
+</table>
+
+<h3 id="ems-structure">Final Folder Structure</h3>
+
+<pre><code>EMS_Application/
+├── Features/
+│   ├── Departments/
+│   │   ├── Commands/
+│   │   │   ├── CreateDepartment/
+│   │   │   │   ├── CreateDepartmentCommand.cs
+│   │   │   │   ├── CreateDepartmentHandler.cs
+│   │   │   │   └── CreateDepartmentValidator.cs
+│   │   │   ├── UpdateDepartment/
+│   │   │   │   ├── UpdateDepartmentCommand.cs
+│   │   │   │   ├── UpdateDepartmentHandler.cs
+│   │   │   │   └── UpdateDepartmentValidator.cs
+│   │   │   └── DeleteDepartment/
+│   │   │       ├── DeleteDepartmentCommand.cs
+│   │   │       └── DeleteDepartmentHandler.cs
+│   │   └── Queries/
+│   │       ├── GetAllDepartments/
+│   │       │   ├── GetAllDepartmentsQuery.cs
+│   │       │   └── GetAllDepartmentsHandler.cs
+│   │       └── GetDepartmentById/
+│   │           ├── GetDepartmentByIdQuery.cs
+│   │           └── GetDepartmentByIdHandler.cs
+│   ├── Employees/
+│   │   ├── Commands/
+│   │   │   ├── CreateEmployee/...
+│   │   │   ├── UpdateEmployee/...
+│   │   │   └── DeleteEmployee/...
+│   │   └── Queries/
+│   │       ├── GetAllEmployees/...
+│   │       └── GetEmployeeById/...
+│   └── Auth/
+│       └── Commands/
+│           ├── Register/...
+│           ├── Login/...
+│           └── RefreshToken/...
+├── Behaviors/
+│   ├── ValidationBehavior.cs
+│   └── LoggingBehavior.cs
+├── Common/
+│   ├── ApiResponse.cs
+│   ├── PagedRequest.cs
+│   ├── PagedResponse.cs
+│   ├── JwtSettings.cs
+│   └── ValidationExtensions.cs
+├── Exceptions/
+│   ├── NotFoundException.cs
+│   ├── BadRequestException.cs
+│   └── ValidationException.cs
+├── Interfaces/
+│   ├── IGenericRepository.cs
+│   ├── IUnitOfWork.cs
+│   └── ...
+├── Mapping/
+│   ├── DepartmentMapping.cs
+│   └── EmployeeMapping.cs
+└── DependencyInjection.cs</code></pre>
+
+<div class="box box-purple">
+    <h4>What gets deleted</h4>
+    <ul>
+        <li><code>IDepartmentService.cs</code> + <code>DepartmentService.cs</code> — replaced by handlers</li>
+        <li><code>IEmployeeService.cs</code> + <code>EmployeeService.cs</code> — replaced by handlers</li>
+        <li><code>IAuthService.cs</code> + <code>AuthService.cs</code> — replaced by handlers</li>
+        <li><code>CreateDepartmentRequest.cs</code> — becomes <code>CreateDepartmentCommand.cs</code></li>
+        <li><code>DepartmentQueryRequest.cs</code> — becomes <code>GetAllDepartmentsQuery.cs</code></li>
+        <li>All Request DTOs become Commands or Queries (add <code>: IRequest&lt;T&gt;</code>)</li>
+    </ul>
+    <p><strong>What stays:</strong> Response DTOs (<code>DepartmentResponse</code>, etc.), Validators (unchanged!), Mapping extensions, Exceptions, Common utilities, Interfaces (repos, UoW).</p>
+</div>
+
+<!-- ============================================================ -->
+<!-- SECTION 8: WHEN TO USE -->
+<!-- ============================================================ -->
+<h2 id="when-to-use">8. When to Use What</h2>
+
+<div class="compare" id="use-service">
+    <div>
+        <h4 style="color: var(--green);">Use Simple Service When</h4>
+        <ul>
+            <li>Small project, few endpoints (5-10)</li>
+            <li>Team of 1-2 developers</li>
+            <li>Operations are basic CRUD</li>
+            <li>No need for cross-cutting pipeline</li>
+            <li>Rapid prototyping</li>
+        </ul>
+    </div>
+    <div id="use-cqrs">
+        <h4 style="color: var(--accent);">Use CQRS + MediatR When</h4>
+        <ul>
+            <li>Medium-large project, many endpoints</li>
+            <li>Multiple developers (less merge conflicts)</li>
+            <li>Complex business logic per operation</li>
+            <li>Reads and writes need different optimization</li>
+            <li>You want automatic validation/logging pipeline</li>
+            <li>You need domain events (notifications)</li>
+        </ul>
+    </div>
+</div>
+
+<div class="box box-orange">
+    <h4>For your EMS project</h4>
+    <p>CQRS is slightly overkill for the current scope (15 endpoints, 1 developer). But you're building this for <strong>interview preparation</strong>. Every senior .NET interviewer expects you to know CQRS and MediatR. Implementing it yourself — and being able to explain why — is exactly what sets you apart.</p>
+</div>
+
+<!-- ============================================================ -->
+<!-- SECTION 9: INTERVIEW -->
+<!-- ============================================================ -->
+<h2 id="interview">9. Interview Questions</h2>
+
+<details class="interview">
+    <summary>Q: What is CQRS and when would you use it?</summary>
+    <div class="answer">
+        <p>CQRS separates read operations (queries) from write operations (commands) into different models. Each operation gets its own class and handler, following Single Responsibility Principle. I'd use it when the application has complex business logic, different optimization needs for reads vs writes, or when working on a team to reduce merge conflicts. For simple CRUD apps, a service layer is sufficient.</p>
+    </div>
+</details>
+
+<details class="interview">
+    <summary>Q: What is MediatR and how does it work?</summary>
+    <div class="answer">
+        <p>MediatR is an in-process mediator library that decouples the sender of a request from its handler. The controller sends a request object via <code>_mediator.Send()</code>. MediatR scans the DI container for a class implementing <code>IRequestHandler&lt;TRequest, TResponse&gt;</code> matching that request type, and calls its <code>Handle</code> method. It's registered via assembly scanning, similar to how FluentValidation auto-registers validators.</p>
+    </div>
+</details>
+
+<details class="interview">
+    <summary>Q: What are Pipeline Behaviors?</summary>
+    <div class="answer">
+        <p>Pipeline Behaviors are MediatR's equivalent of HTTP middleware. They implement <code>IPipelineBehavior&lt;TRequest, TResponse&gt;</code> and wrap every request. The <code>next()</code> delegate calls the next behavior or the handler — exactly like <code>await _next(context)</code> in middleware. Common uses: automatic validation (run FluentValidation before every handler), logging with timing, caching, and transaction management.</p>
+    </div>
+</details>
+
+<details class="interview">
+    <summary>Q: What's the difference between Send and Publish in MediatR?</summary>
+    <div class="answer">
+        <p><code>Send()</code> dispatches an <code>IRequest&lt;T&gt;</code> to exactly one handler and returns a result. Used for commands and queries. <code>Publish()</code> dispatches an <code>INotification</code> to zero or more handlers with no return value. Used for domain events — e.g., after creating a department, publish a notification that triggers cache invalidation AND email sending independently.</p>
+    </div>
+</details>
+
+<details class="interview">
+    <summary>Q: How do Commands differ from Queries in CQRS?</summary>
+    <div class="answer">
+        <p>Commands change state (Create, Update, Delete) — they have side effects and usually need validation. Queries read state (GetAll, GetById) — they're idempotent and don't modify data. Separating them lets you optimize each independently: queries can use caching, read replicas, and projections, while commands can use transactions, validation, and domain events.</p>
+    </div>
+</details>
+
+<details class="interview">
+    <summary>Q: Can you implement CQRS without MediatR?</summary>
+    <div class="answer">
+        <p>Yes. CQRS is a pattern, MediatR is a library. You could have separate <code>ICommandHandler&lt;T&gt;</code> and <code>IQueryHandler&lt;T, TResult&gt;</code> interfaces with manual DI registration. MediatR just provides a convenient dispatcher, pipeline behaviors, and assembly scanning. In fact, some teams prefer their own lightweight mediator to avoid the MediatR dependency.</p>
+    </div>
+</details>
+
+<details class="interview">
+    <summary>Q: What are the downsides of CQRS?</summary>
+    <div class="answer">
+        <p>More files (each operation = 2-3 files vs 1 method in a service). Can feel like over-engineering for simple CRUD. Debugging is harder — you're jumping through mediator dispatch instead of direct method calls. The indirection makes the flow less obvious to junior developers. Also, if your reads and writes are similar (basic CRUD), the separation adds complexity without real benefit.</p>
+    </div>
+</details>
+
+<details class="interview">
+    <summary>Q: How does the ValidationBehavior know which validator to use?</summary>
+    <div class="answer">
+        <p>It injects <code>IEnumerable&lt;IValidator&lt;TRequest&gt;&gt;</code>. When MediatR processes a <code>CreateDepartmentCommand</code>, the behavior's generic type resolves to <code>IValidator&lt;CreateDepartmentCommand&gt;</code>. If a <code>CreateDepartmentValidator : AbstractValidator&lt;CreateDepartmentCommand&gt;</code> is registered in DI, it gets injected. If no validator exists for that type, the collection is empty and validation is skipped.</p>
+    </div>
+</details>
+
+<details class="interview">
+    <summary>Q: Where does validation happen in a CQRS architecture?</summary>
+    <div class="answer">
+        <p>In a Pipeline Behavior, not in the handler. The <code>ValidationBehavior</code> runs before the handler, checking if a FluentValidation validator exists for the request type. This removes all validation boilerplate from handlers — they can assume the input is already valid. It's the same concept as having validation middleware in the HTTP pipeline, but at the MediatR level.</p>
+    </div>
+</details>
+
+<details class="interview">
+    <summary>Q: How do you handle cross-cutting concerns in CQRS?</summary>
+    <div class="answer">
+        <p>Through MediatR Pipeline Behaviors. They're composable — you can chain LoggingBehavior → ValidationBehavior → CachingBehavior → Handler. Each behavior calls <code>next()</code> to pass to the next one, like middleware. This keeps handlers focused on business logic only, while cross-cutting concerns (logging, validation, caching, transactions) are handled generically and applied to all requests.</p>
+    </div>
+</details>
+
+<!-- ============================================================ -->
+<!-- SECTION 10: CHEAT SHEET -->
+<!-- ============================================================ -->
+<h2 id="cheatsheet">10. Cheat Sheet</h2>
+
+<table>
+    <thead>
+        <tr>
+            <th>Concept</th>
+            <th>Interface</th>
+            <th>Purpose</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td>Query</td>
+            <td><code>IRequest&lt;TResponse&gt;</code></td>
+            <td>Read operation — carries filter/pagination params</td>
+        </tr>
+        <tr>
+            <td>Command</td>
+            <td><code>IRequest&lt;TResponse&gt;</code> or <code>IRequest</code></td>
+            <td>Write operation — carries data to create/update</td>
+        </tr>
+        <tr>
+            <td>Handler</td>
+            <td><code>IRequestHandler&lt;TRequest, TResponse&gt;</code></td>
+            <td>Does the actual work — one per command/query</td>
+        </tr>
+        <tr>
+            <td>Notification</td>
+            <td><code>INotification</code></td>
+            <td>Domain event — one-to-many (multiple handlers react)</td>
+        </tr>
+        <tr>
+            <td>Notification Handler</td>
+            <td><code>INotificationHandler&lt;T&gt;</code></td>
+            <td>Reacts to a notification (cache clear, email, log)</td>
+        </tr>
+        <tr>
+            <td>Behavior</td>
+            <td><code>IPipelineBehavior&lt;TRequest, TResponse&gt;</code></td>
+            <td>Middleware — wraps every request (validation, logging)</td>
+        </tr>
+        <tr>
+            <td>Dispatcher</td>
+            <td><code>IMediator</code></td>
+            <td>Sends requests to handlers — injected in controllers</td>
+        </tr>
+    </tbody>
+</table>
+
+<h3>Quick Reference — Creating a New Feature</h3>
+
+<pre><code><span class="cmt">// 1. Create the Command/Query</span>
+<span class="kw">public class</span> <span class="type">DoSomethingCommand</span> : <span class="type">IRequest</span>&lt;<span class="type">SomeResponse</span>&gt;
+{
+    <span class="cmt">// properties = input data</span>
+}
+
+<span class="cmt">// 2. Create the Handler</span>
+<span class="kw">public class</span> <span class="type">DoSomethingHandler</span> : <span class="type">IRequestHandler</span>&lt;<span class="type">DoSomethingCommand</span>, <span class="type">SomeResponse</span>&gt;
+{
+    <span class="kw">public async</span> Task&lt;<span class="type">SomeResponse</span>&gt; <span class="fn">Handle</span>(
+        <span class="type">DoSomethingCommand</span> <span class="param">request</span>,
+        <span class="type">CancellationToken</span> <span class="param">ct</span>)
+    {
+        <span class="cmt">// do the work</span>
+    }
+}
+
+<span class="cmt">// 3. (Optional) Create a Validator</span>
+<span class="kw">public class</span> <span class="type">DoSomethingValidator</span> : <span class="type">AbstractValidator</span>&lt;<span class="type">DoSomethingCommand</span>&gt;
+{
+    <span class="kw">public</span> <span class="fn">DoSomethingValidator</span>()
+    {
+        <span class="fn">RuleFor</span>(x => x.Name).<span class="fn">NotEmpty</span>();
+    }
+}
+
+<span class="cmt">// 4. Call from Controller</span>
+<span class="kw">var</span> result = <span class="kw">await</span> _mediator.<span class="fn">Send</span>(<span class="kw">new</span> <span class="type">DoSomethingCommand</span> { Name = <span class="str">"test"</span> });
+
+<span class="cmt">// That's it. MediatR auto-discovers the handler.
+// ValidationBehavior auto-validates if a validator exists.
+// LoggingBehavior auto-logs timing.
+// No service interface, no manual DI registration.</span></code></pre>
+
+<div class="box box-green" style="margin-top: 40px;">
+    <h4>You're ready.</h4>
+    <p>You now understand CQRS (the pattern), MediatR (the library), Pipeline Behaviors (the middleware), and Notifications (the events). You know when to use it, when not to, and how to explain it in an interview. Time to build it in your EMS project.</p>
+</div>
+
+</main>
+</body>
+</html>

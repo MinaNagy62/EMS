@@ -8,7 +8,7 @@ Everything you need to understand this project, top to bottom. Every file, every
 
 An **Employee Management System (EMS)** REST API. It manages **Departments**, **Employees**, and **User Authentication**. Built with .NET 10, SQL Server, Entity Framework Core, and JWT authentication. The goal is to learn and demonstrate backend patterns for interviews.
 
-**Current status:** Milestone 1 (COMPLETED), Milestone 2 (COMPLETED), Milestone 3 (IN PROGRESS ~70%).
+**Current status:** Milestone 1 (COMPLETED), Milestone 2 (COMPLETED), Milestone 3 (COMPLETED), Milestone 4 (COMPLETED).
 
 ---
 
@@ -51,6 +51,15 @@ The project is split into 4 layers. The core rule: **inner layers never depend o
 This layer contains only your data models and enums. No logic, no dependencies.
 
 #### Entities
+
+**BaseEntity** (`Entities/BaseEntity.cs`) — Added in M4:
+```csharp
+public abstract class BaseEntity
+{
+    public int Id { get; set; }
+}
+```
+All entities (Department, Employee, AppUser) inherit from this. The generic repository is constrained to `where T : BaseEntity`, which guarantees every entity has an `Id` property. This enables deterministic `.OrderBy(x => x.Id)` in pagination without knowing the concrete entity type.
 
 **Department** (`Entities/Department.cs`):
 | Property | Type | Purpose |
@@ -125,9 +134,10 @@ This is the biggest layer. It contains: interfaces, DTOs, mapping, validation, s
 
 #### 3.2.1 Interfaces (`Interfaces/`)
 
-**IGenericRepository\<T\>** — base repository with common CRUD:
+**IGenericRepository\<T\>** where `T : BaseEntity` — base repository with common CRUD:
 - `GetByIdAsync(int id)` → find by primary key
 - `GetAllAsync(filter?, includes[])` → list with optional WHERE and Include
+- `GetPagedAsync(PagedRequest, filters?, includes[])` → paginated + filtered + sorted results (M4)
 - `FindAsync(predicate, includes[])` → single entity with optional Include
 - `AddAsync(entity)` → track for insert
 - `Update(entity)` → track for update
@@ -180,6 +190,12 @@ DTOs (Data Transfer Objects) are the shapes that go in and out of the API. Entit
 - `RegisterRequest` — FirstName, LastName, Email, Password
 - `LoginRequest` — Email, Password
 - `AuthResponse` — Token, RefreshToken, ExpiresAt, Email, Role
+
+**Query DTOs** — Added in M4:
+- `DepartmentQueryRequest : PagedRequest` — adds `Search` (string?), `IsActive` (bool?)
+- `EmployeeQueryRequest : PagedRequest` — adds `Search` (string?), `DepartmentId` (int?), `Gender` (Gender?)
+
+These extend `PagedRequest` (which has PageNumber, PageSize, SortBy, SortDescending), so a single `[FromQuery]` parameter gives the controller pagination + filtering + sorting. Nullable properties mean "don't filter" — only non-null values are applied as WHERE clauses.
 
 **Why Create and Update are separate classes even though they're identical:** They represent different intents. If Update later becomes a PATCH (partial update with nullable fields), they'll diverge. Separate types = separate validators = easy to change one without affecting the other.
 
@@ -284,6 +300,45 @@ Uses **static factory methods** (a design pattern):
 
 This prevents mistakes like forgetting to set `Success = true`. The `Message` property defaults to `string.Empty` to avoid null reference issues.
 
+**PagedRequest** (`Common/PagedRequest.cs`) — Added in M4:
+```csharp
+public class PagedRequest
+{
+    private const int MaxPageSize = 50;
+    private int _pageNumber = 1;
+    private int _pageSize = 10;
+
+    public int PageNumber
+    {
+        get => _pageNumber;
+        set => _pageNumber = value < 1 ? 1 : value;
+    }
+    public int PageSize
+    {
+        get => _pageSize;
+        set => _pageSize = value < 1 ? 1 : value > MaxPageSize ? MaxPageSize : value;
+    }
+    public string? SortBy { get; set; }
+    public bool SortDescending { get; set; } = false;
+}
+```
+Private backing fields with clamping in setters — prevents negative pages and absurdly large page sizes. MaxPageSize=50 prevents someone from requesting 100k rows. SortBy and SortDescending support dynamic sorting (resolved via reflection in the repository).
+
+**PagedResponse\<T\>** (`Common/PagedResponse.cs`) — Added in M4:
+```csharp
+public class PagedResponse<T>
+{
+    public List<T> Items { get; set; } = new();
+    public int PageNumber { get; set; }
+    public int PageSize { get; set; }
+    public int TotalCount { get; set; }
+    public int TotalPages => (int)Math.Ceiling(TotalCount / (double)PageSize);
+    public bool HasPreviousPage => PageNumber > 1;
+    public bool HasNextPage => PageNumber < TotalPages;
+}
+```
+`TotalPages`, `HasPreviousPage`, `HasNextPage` are computed — never stored. The frontend uses these to render pagination controls.
+
 **ValidationExtensions** (`Common/ValidationExtensions.cs`) — Added in M3:
 ```csharp
 public static IDictionary<string, string[]> ToErrorDictionary(this ValidationResult result)
@@ -318,10 +373,12 @@ This is a **POCO class** that maps 1:1 to the `JwtSettings` section in `appsetti
 **Key patterns in services:**
 - **Validation first:** Every Create/Update method validates before doing anything else
 - **Soft delete:** `Delete` doesn't remove from DB — it sets `IsActive = false` and `UpdatedAt = DateTime.UtcNow`
-- **All queries filter by `IsActive`:** `GetAll` uses `.GetAllAsync(d => d.IsActive)`, not `.GetAllAsync()`
+- **All queries filter by `IsActive`:** `GetAll` uses `.GetPagedAsync(request, filters)` with IsActive in the filter list
 - **GetById throws NotFoundException:** Services never return null for "not found" — they throw. The middleware turns it into a 404.
 - **Employee queries include Department:** Because `EmployeeResponse` needs `DepartmentName`, the service passes `e => e.Department` as an include expression to avoid lazy loading issues
 - **CreatedAt/UpdatedAt set in service:** `DateTime.UtcNow` is set before saving
+- **Dynamic filter building (M4):** `GetAllDepartmentsAsync` and `GetAllEmployeesAsync` build a `List<Expression<Func<T, bool>>>` from the query DTO. Each non-null filter property adds a Where expression. All filters are AND'd together in SQL.
+- **Caching (M4 — DepartmentService only):** `IMemoryCache` injected. Cache-aside pattern: check cache → miss? → query DB → store in cache → return. Cache key built from all query params. `CancellationTokenSource` with `CancellationChangeToken` links all entries so one `Cancel()` evicts everything. `InvalidateCache()` called on Create/Update/Delete. Sliding expiration 10 min + absolute 1 hour.
 
 **AuthService** (`Services/AuthService.cs`) — Added in M3. The authentication service with 3 methods:
 
@@ -418,9 +475,11 @@ Fluent API configuration — one per entity. This is where database schema rules
 
 #### 3.3.3 Repositories (`Repositories/`)
 
-**GenericRepository\<T\>** — implements `IGenericRepository<T>`:
+**GenericRepository\<T\>** — implements `IGenericRepository<T>` where `T : BaseEntity` (M4 change — was `class`):
 - Uses `DbSet<T>` for all operations
 - `GetAllAsync` builds a query with optional WHERE and Includes, then calls `.ToListAsync()`
+- `GetPagedAsync` (M4) — accepts `PagedRequest` + list of filter expressions + includes. Applies all filters (AND), counts total, applies sorting via `ApplySorting`, then `Skip/Take` for pagination. Returns `PagedResponse<T>`
+- `ApplySorting` (M4) — private static method. If `SortBy` is null, falls back to `OrderBy(x => x.Id)`. Otherwise uses reflection (`BindingFlags.IgnoreCase`) to find the property, then builds an expression tree: `Expression.Parameter` → `Expression.Property` → `Expression.Convert(typeof(object))` → `Expression.Lambda<Func<T, object>>`. Invalid properties silently fall back to Id.
 - `FindAsync` builds a query with Includes, then calls `.FirstOrDefaultAsync(predicate)`
 - `AddAsync` uses `_dbSet.AddAsync()` (async because value generators might need DB access in HiLo scenarios — with IDENTITY, sync `Add` would also work)
 - `Update` and `Remove` are sync — they only mark the entity in the Change Tracker, no DB call happens until `SaveChangesAsync()`
@@ -509,6 +568,7 @@ The entire app startup in one file:
 2. Register services:
    - AddControllers()
    - AddSwaggerGen()
+   - AddMemoryCache()       ← IMemoryCache singleton (M4)
    - AddApplication()       ← services, validators, auth service
    - AddInfrastructure()    ← DbContext, UnitOfWork, JwtTokenService, JwtSettings
    - AddAuthentication()    ← JWT Bearer scheme config (M3)
@@ -837,6 +897,9 @@ The refresh endpoint takes a `RefreshTokenRequest` DTO (just `{ "refreshToken": 
 | **Options Pattern** | JwtSettings + IOptions\<T\> | Strongly-typed config, compile-time safety, testable |
 | **Tuple Return** | IJwtTokenService.GenerateAccessToken | Returns related values together, prevents drift between token and its expiry |
 | **Token Rotation** | AuthService.RefreshTokenAsync | Security — invalidates old refresh tokens on every refresh |
+| **Cache-Aside** | DepartmentService + IMemoryCache | Check cache first, query DB on miss, store result. Invalidate on writes (M4) |
+| **Expression Trees** | GenericRepository.ApplySorting | Build LINQ expressions dynamically at runtime from string property names (M4) |
+| **Inheritance Constraint** | BaseEntity + `where T : BaseEntity` | Guarantees Id exists on all entities for deterministic sorting (M4) |
 
 ---
 
@@ -849,6 +912,7 @@ EMS/
 ├── EMS_Domain/                          ← INNER CORE (no dependencies)
 │   ├── EMS_Domain.csproj
 │   ├── Entities/
+│   │   ├── BaseEntity.cs               ← M4
 │   │   ├── Department.cs
 │   │   ├── Employee.cs
 │   │   └── AppUser.cs                  ← M3
@@ -862,14 +926,18 @@ EMS/
 │   ├── Common/
 │   │   ├── ApiResponse.cs
 │   │   ├── JwtSettings.cs              ← M3
+│   │   ├── PagedRequest.cs             ← M4
+│   │   ├── PagedResponse.cs            ← M4
 │   │   └── ValidationExtensions.cs     ← M3
 │   ├── DTO/
 │   │   ├── Department/
 │   │   │   ├── CreateDepartmentRequest.cs
+│   │   │   ├── DepartmentQueryRequest.cs  ← M4
 │   │   │   ├── UpdateDepartmentRequest.cs
 │   │   │   └── DepartmentResponse.cs
 │   │   ├── Employee/
 │   │   │   ├── CreateEmployeeRequest.cs
+│   │   │   ├── EmployeeQueryRequest.cs    ← M4
 │   │   │   ├── UpdateEmployeeRequest.cs
 │   │   │   └── EmployeeResponse.cs
 │   │   └── Auth/                       ← M3
@@ -954,6 +1022,7 @@ EMS/
 | EMS_Application | Microsoft.Extensions.DependencyInjection.Abstractions | 10.0.3 | `IServiceCollection` for DI extension methods |
 | EMS_Application | BCrypt.Net-Next | 4.1.0 | Password hashing (M3) |
 | EMS_Application | Microsoft.Extensions.Options | 10.0.3 | `IOptions<T>` for strongly-typed config (M3) |
+| EMS_Application | Microsoft.Extensions.Caching.Memory | 10.0.3 | `IMemoryCache` for in-memory caching (M4) |
 | EMS_Infrastructure | Microsoft.EntityFrameworkCore.SqlServer | 10.0.3 | SQL Server database provider |
 | EMS_Infrastructure | Microsoft.EntityFrameworkCore.Tools | 10.0.3 | Migrations CLI (`dotnet ef`) |
 | EMS_API | Microsoft.AspNetCore.OpenApi | 10.0.2 | OpenAPI metadata |
@@ -994,16 +1063,7 @@ EMS/
 - **Milestone 1:** Project Setup & Clean Architecture (Score: 7.5/10) ✓
 - **Milestone 2:** DTOs, Validation & Global Error Handling (Score: 8.5/10) ✓
 - **Milestone 3:** Authentication & Authorization (Score: 8.5/10) ✓
-
-### Milestone 4: Advanced Querying & Performance (NOT STARTED)
-- Pagination (PagedList<T>)
-- Filtering & Searching (dynamic query building)
-- Sorting (dynamic, by any property)
-- Specification Pattern
-- In-Memory Caching (IMemoryCache)
-- Response caching headers
-- Attendance entity + endpoints
-- EF Core query optimization (AsNoTracking, Select projections)
+- **Milestone 4:** Advanced Querying & Performance (Score: 9/10) ✓
 
 ### Milestone 5: CQRS with MediatR (NOT STARTED)
 - MediatR setup (Commands & Queries)

@@ -13,7 +13,7 @@ I am a .NET developer with 3 years of experience. I'm building this project to m
 
 ---
 
-## Current Project Structure (ACTUAL — M3 COMPLETED)
+## Current Project Structure (ACTUAL — M4 COMPLETED)
 ```
 EMS/
 ├── EMS_API/
@@ -30,14 +30,18 @@ EMS/
 │   ├── Common/
 │   │   ├── ApiResponse.cs
 │   │   ├── JwtSettings.cs                         ← M3
+│   │   ├── PagedRequest.cs                        ← M4
+│   │   ├── PagedResponse.cs                       ← M4
 │   │   └── ValidationExtensions.cs                ← M3
 │   ├── DTO/
 │   │   ├── Department/
 │   │   │   ├── CreateDepartmentRequest.cs
+│   │   │   ├── DepartmentQueryRequest.cs          ← M4
 │   │   │   ├── UpdateDepartmentRequest.cs
 │   │   │   └── DepartmentResponse.cs
 │   │   ├── Employee/
 │   │   │   ├── CreateEmployeeRequest.cs
+│   │   │   ├── EmployeeQueryRequest.cs            ← M4
 │   │   │   ├── UpdateEmployeeRequest.cs
 │   │   │   └── EmployeeResponse.cs
 │   │   └── Auth/                                  ← M3
@@ -80,6 +84,7 @@ EMS/
 │   └── EMS_Application.csproj
 ├── EMS_Domain/
 │   ├── Entities/
+│   │   ├── BaseEntity.cs                          ← M4
 │   │   ├── Department.cs
 │   │   ├── Employee.cs
 │   │   └── AppUser.cs                             ← M3
@@ -112,7 +117,7 @@ EMS/
 
 **NuGet Packages installed:**
 - EMS_API: Microsoft.AspNetCore.OpenApi (10.0.2), Microsoft.EntityFrameworkCore.Design (10.0.3), Swashbuckle.AspNetCore (10.1.4), Microsoft.AspNetCore.Authentication.JwtBearer (10.0.3)
-- EMS_Application: Microsoft.Extensions.DependencyInjection.Abstractions (10.0.3), FluentValidation.DependencyInjectionExtensions (12.1.1), BCrypt.Net-Next (4.1.0), Microsoft.Extensions.Options (10.0.3)
+- EMS_Application: Microsoft.Extensions.DependencyInjection.Abstractions (10.0.3), FluentValidation.DependencyInjectionExtensions (12.1.1), BCrypt.Net-Next (4.1.0), Microsoft.Extensions.Options (10.0.3), Microsoft.Extensions.Caching.Memory (10.0.3)
 - EMS_Infrastructure: Microsoft.EntityFrameworkCore.SqlServer (10.0.3), Microsoft.EntityFrameworkCore.Tools (10.0.3)
 - EMS_Domain: none
 
@@ -178,7 +183,7 @@ EMS/
 | 1 | Project Setup & Clean Architecture | COMPLETED (Score: 7.5/10) |
 | 2 | DTOs, Validation & Error Handling | COMPLETED (Score: 8.5/10) |
 | 3 | Authentication & Authorization | COMPLETED (Score: 8.5/10) |
-| 4 | Advanced Querying & Performance | Not Started |
+| 4 | Advanced Querying & Performance | COMPLETED (Score: 9/10) |
 | 5 | CQRS with MediatR | Not Started |
 | 6 | Background Jobs, Logging & Polish | Not Started |
 
@@ -223,6 +228,49 @@ EMS/
 - Refresh token rotation
 - ClockSkew = Zero
 - Role-based [Authorize] on controllers
+
+---
+
+## Milestone 4 — COMPLETED (Score: 9/10)
+
+### What was built:
+
+**Pagination:**
+- `PagedRequest` — PageNumber (default 1, min 1), PageSize (default 10, max 50). Private backing fields with clamping in setters.
+- `PagedResponse<T>` — Items, PageNumber, PageSize, TotalCount, computed TotalPages/HasPreviousPage/HasNextPage
+- `BaseEntity` abstract class with `Id` — all entities inherit from it. Generic constraint `where T : BaseEntity` enables `.OrderBy(x => x.Id)` in repository.
+- `GetPagedAsync` in GenericRepository — CountAsync + OrderBy + Skip/Take
+
+**Filtering & Searching:**
+- `DepartmentQueryRequest : PagedRequest` — Search (Name/Code), IsActive (overridable, defaults true)
+- `EmployeeQueryRequest : PagedRequest` — Search (FirstName/LastName/Email), DepartmentId, Gender
+- `GetPagedAsync` accepts `List<Expression<Func<T, bool>>>` — multiple filters = AND in SQL
+- Filters built in service layer (business logic), repository stays generic (dependency rule)
+- Case-insensitive: `.ToLower().Contains()` → SQL `LOWER() LIKE`
+
+**Sorting:**
+- `SortBy` (string?) and `SortDescending` (bool) on PagedRequest
+- `ApplySorting` in GenericRepository — reflection finds property (BindingFlags.IgnoreCase), expression tree builds lambda
+- Expression tree: `Expression.Parameter` → `Expression.Property` → `Expression.Convert(object)` → `Expression.Lambda<Func<T, object>>`
+- Invalid property silently falls back to Id
+
+**Caching:**
+- `IMemoryCache` injected in DepartmentService (not repository — cache DTOs, not entities)
+- Cache key from all query params: `departments_p1_s10_searchHR_activetrue_sortname_descfalse`
+- `MemoryCacheEntryOptions`: SlidingExpiration=10min, AbsoluteExpiration=1hr
+- `CancellationTokenSource` + `CancellationChangeToken` for bulk invalidation — one Cancel() evicts ALL department entries
+- `InvalidateCache()` on Create/Update/Delete: Cancel → Dispose → new CTS
+- Static `_cacheResetToken` because IMemoryCache is singleton, CTS must outlive scoped service
+- `AddMemoryCache()` in Program.cs
+- Only departments cached (low cardinality, rarely changes)
+
+### Interview topics covered:
+- "How do you implement pagination?" — Skip/Take on IQueryable, CountAsync for total
+- "IQueryable vs IEnumerable?" — IQueryable builds SQL expression tree, IEnumerable evaluates in memory
+- "How do you build dynamic LINQ expressions?" — Expression.Parameter/Property/Convert/Lambda
+- "What caching strategies have you used?" — Cache-aside pattern with IMemoryCache
+- "How do you handle cache invalidation?" — CancellationTokenSource with expiration tokens
+- "Why cache DTOs and not entities?" — EF Core Change Tracker corruption risk
 
 ---
 
@@ -309,6 +357,18 @@ EMS/
 8. What is token rotation and why is it important?
 9. How does [Authorize(Roles)] work under the hood with ClaimTypes.Role?
 10. Why set ClockSkew to TimeSpan.Zero?
+
+### After Milestone 4:
+1. How do you implement pagination in .NET? What SQL does Skip/Take generate?
+2. What is the difference between IQueryable and IEnumerable? When does the query execute?
+3. How do you build dynamic LINQ expressions at runtime?
+4. What is an expression tree? How does EF Core use them?
+5. Why did you use a BaseEntity constraint on your generic repository?
+6. How do you handle dynamic sorting when the property name is a string?
+7. What caching strategies have you used? What is cache-aside pattern?
+8. How do you invalidate related cache entries? What is CancellationTokenSource approach?
+9. Why cache DTOs and not EF Core entities?
+10. Where should filter logic live — service or repository? Why?
 
 ---
 
