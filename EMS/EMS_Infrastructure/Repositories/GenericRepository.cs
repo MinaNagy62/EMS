@@ -40,13 +40,16 @@ public class GenericRepository<T> : IGenericRepository<T> where T : BaseEntity
 
     public async Task<PagedResponse<T>> GetPagedAsync(
         PagedRequest request,
-        Expression<Func<T, bool>>? filter = null,
+        List<Expression<Func<T, bool>>>? filters = null,
         params Expression<Func<T, object>>[] includes)
     {
         IQueryable<T> query = _dbSet;
 
-        if (filter is not null)
-            query = query.Where(filter);
+        if (filters is not null)
+        {
+            foreach (var filter in filters)
+                query = query.Where(filter);
+        }
 
         foreach (var include in includes)
             query = query.Include(include);

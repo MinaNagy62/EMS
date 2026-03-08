@@ -1,9 +1,11 @@
+using System.Linq.Expressions;
 using EMS_Application.Common;
 using EMS_Application.DTO.Employee;
 using EMS_Application.Exceptions;
 using EMS_Application.Interfaces;
 using EMS_Application.Interfaces.Employees;
 using EMS_Application.Mapping;
+using EMS_Domain.Entities;
 using FluentValidation;
 
 namespace EMS_Application.Services;
@@ -24,12 +26,32 @@ public class EmployeeService : IEmployeeService
         _updateValidator = updateValidator;
     }
 
-    public async Task<PagedResponse<EmployeeResponse>> GetAllEmployeesAsync(PagedRequest request)
+    public async Task<PagedResponse<EmployeeResponse>> GetAllEmployeesAsync(EmployeeQueryRequest request)
     {
+        var filters = new List<Expression<Func<Employee, bool>>>
+        {
+            e => e.IsActive
+        };
+
+        // Search filter — searches FirstName, LastName, and Email
+        if (!string.IsNullOrWhiteSpace(request.Search))
+        {
+            var search = request.Search.ToLower();
+            filters.Add(e => e.FirstName.ToLower().Contains(search)
+                           || e.LastName.ToLower().Contains(search)
+                           || e.Email.ToLower().Contains(search));
+        }
+
+        // Department filter
+        if (request.DepartmentId.HasValue)
+            filters.Add(e => e.DepartmentId == request.DepartmentId.Value);
+
+        // Gender filter
+        if (request.Gender.HasValue)
+            filters.Add(e => e.Gender == request.Gender.Value);
+
         var pagedEmployees = await _unitOfWork.Employees.GetPagedAsync(
-            request,
-            e => e.IsActive,
-            e => e.Department);
+            request, filters, e => e.Department);
 
         return new PagedResponse<EmployeeResponse>
         {

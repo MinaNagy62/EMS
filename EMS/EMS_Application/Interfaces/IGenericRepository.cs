@@ -14,7 +14,7 @@ public interface IGenericRepository<T> where T : BaseEntity
 
     Task<PagedResponse<T>> GetPagedAsync(
         PagedRequest request,
-        Expression<Func<T, bool>>? filter = null,
+        List<Expression<Func<T, bool>>>? filters = null,
         params Expression<Func<T, object>>[] includes);
 
     Task<T?> FindAsync(

@@ -1,9 +1,11 @@
+using System.Linq.Expressions;
 using EMS_Application.Common;
 using EMS_Application.DTO.Department;
 using EMS_Application.Exceptions;
 using EMS_Application.Interfaces;
 using EMS_Application.Interfaces.Departments;
 using EMS_Application.Mapping;
+using EMS_Domain.Entities;
 using FluentValidation;
 
 namespace EMS_Application.Services;
@@ -24,9 +26,22 @@ public class DepartmentService : IDepartmentService
         _updateValidator = updateValidator;
     }
 
-    public async Task<PagedResponse<DepartmentResponse>> GetAllDepartmentsAsync(PagedRequest request)
+    public async Task<PagedResponse<DepartmentResponse>> GetAllDepartmentsAsync(DepartmentQueryRequest request)
     {
-        var pagedDepartments = await _unitOfWork.Departments.GetPagedAsync(request, d => d.IsActive);
+        var filters = new List<Expression<Func<Department, bool>>>();
+
+        // IsActive filter — default to active-only if not specified
+        filters.Add(d => d.IsActive == (request.IsActive ?? true));
+
+        // Search filter — searches Name and Code
+        if (!string.IsNullOrWhiteSpace(request.Search))
+        {
+            var search = request.Search.ToLower();
+            filters.Add(d => d.Name.ToLower().Contains(search)
+                           || d.Code.ToLower().Contains(search));
+        }
+
+        var pagedDepartments = await _unitOfWork.Departments.GetPagedAsync(request, filters);
 
         return new PagedResponse<DepartmentResponse>
         {
