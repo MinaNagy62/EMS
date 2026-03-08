@@ -18,4 +18,7 @@ public class PagedRequest
         get => _pageSize;
         set => _pageSize = value < 1 ? 1 : value > MaxPageSize ? MaxPageSize : value;
     }
+
+    public string? SortBy { get; set; }
+    public bool SortDescending { get; set; } = false;
 }

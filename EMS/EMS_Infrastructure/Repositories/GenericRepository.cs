@@ -56,8 +56,9 @@ public class GenericRepository<T> : IGenericRepository<T> where T : BaseEntity
 
         var totalCount = await query.CountAsync();
 
+        query = ApplySorting(query, request.SortBy, request.SortDescending);
+
         var items = await query
-            .OrderBy(x => x.Id)
             .Skip((request.PageNumber - 1) * request.PageSize)
             .Take(request.PageSize)
             .ToListAsync();
@@ -69,6 +70,27 @@ public class GenericRepository<T> : IGenericRepository<T> where T : BaseEntity
             PageSize = request.PageSize,
             TotalCount = totalCount
         };
+    }
+
+    private static IQueryable<T> ApplySorting(IQueryable<T> query, string? sortBy, bool sortDescending)
+    {
+        if (string.IsNullOrWhiteSpace(sortBy))
+            return sortDescending ? query.OrderByDescending(x => x.Id) : query.OrderBy(x => x.Id);
+
+        // Validate that the property exists on T (case-insensitive)
+        var property = typeof(T).GetProperty(
+            sortBy, System.Reflection.BindingFlags.IgnoreCase | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+
+        if (property is null)
+            return sortDescending ? query.OrderByDescending(x => x.Id) : query.OrderBy(x => x.Id);
+
+        // Build expression tree: x => x.PropertyName
+        var parameter = Expression.Parameter(typeof(T), "x");
+        var propertyAccess = Expression.Property(parameter, property);
+        var converted = Expression.Convert(propertyAccess, typeof(object));
+        var lambda = Expression.Lambda<Func<T, object>>(converted, parameter);
+
+        return sortDescending ? query.OrderByDescending(lambda) : query.OrderBy(lambda);
     }
 
     public async Task<T?> FindAsync(
