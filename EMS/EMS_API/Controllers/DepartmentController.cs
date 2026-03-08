@@ -1,6 +1,9 @@
 using EMS_Application.Common;
 using EMS_Application.DTO.Department;
+using EMS_Application.Features.Departments.Queries.GetAllDepartments;
+using EMS_Application.Features.Departments.Queries.GetDepartmentById;
 using EMS_Application.Interfaces.Departments;
+using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -11,24 +14,26 @@ namespace EMS_API.Controllers;
 [Authorize]
 public class DepartmentController : ControllerBase
 {
+    private readonly IMediator _mediator;
     private readonly IDepartmentService _departmentService;
 
-    public DepartmentController(IDepartmentService departmentService)
+    public DepartmentController(IMediator mediator, IDepartmentService departmentService)
     {
+        _mediator = mediator;
         _departmentService = departmentService;
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetAll([FromQuery] DepartmentQueryRequest request)
+    public async Task<IActionResult> GetAll([FromQuery] GetAllDepartmentsQuery query)
     {
-        var departments = await _departmentService.GetAllDepartmentsAsync(request);
+        var departments = await _mediator.Send(query);
         return Ok(ApiResponse<PagedResponse<DepartmentResponse>>.SuccessResponse(departments));
     }
 
     [HttpGet("{id}")]
     public async Task<IActionResult> GetById(int id)
     {
-        var department = await _departmentService.GetDepartmentByIdAsync(id);
+        var department = await _mediator.Send(new GetDepartmentByIdQuery { Id = id });
         return Ok(ApiResponse<DepartmentResponse>.SuccessResponse(department));
     }
 

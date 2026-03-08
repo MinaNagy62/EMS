@@ -212,25 +212,53 @@ Small in scope, but deep in patterns and best practices.
 
 ---
 
-## Milestone 5: CQRS with MediatR & Advanced Patterns — NOT STARTED
+## Milestone 5: CQRS with MediatR — IN PROGRESS
 **Challenge:** Separate reads from writes using CQRS + MediatR.
 
-**You will cover:**
-1. MediatR setup (Commands & Queries)
-2. CQRS pattern (separate read/write models)
-3. MediatR Pipeline Behaviors (logging, validation)
-4. Leave Request feature (Apply, Approve, Reject — state machine)
-5. Domain Events (LeaveApproved, LeaveRejected)
-6. Notification handlers (react to domain events)
-7. Refactor existing endpoints to use MediatR
+### Sprint 1 — MediatR Setup + Department Queries: COMPLETED ✓ (Score: 9.5/10)
+
+**What CQRS is:**
+CQRS (Command Query Responsibility Segregation) splits reads and writes into separate models. Instead of one service class handling everything (GetAll, GetById, Create, Update, Delete), each operation becomes its own pair: a Request class (Command or Query) and a Handler class. Commands change state (writes), Queries read state (reads). This follows Single Responsibility Principle — each handler does exactly one thing with only the dependencies it needs.
+
+**What MediatR is:**
+MediatR is an in-process message dispatcher. The controller doesn't call services directly — it sends a request object via `_mediator.Send(query)`. MediatR scans the DI container for the handler that matches the request type (via `IRequestHandler<TRequest, TResponse>`) and calls it. Registration is automatic via assembly scanning, similar to how FluentValidation auto-discovers validators.
+
+**What Pipeline Behaviors are:**
+Pipeline Behaviors are MediatR's equivalent of HTTP middleware. They implement `IPipelineBehavior<TRequest, TResponse>` and wrap every request. `next()` calls the next behavior or the handler — like `await _next(context)` in middleware. Used for cross-cutting concerns (validation, logging) so handlers stay focused on business logic only.
+
+**Delivered:**
+- [x] MediatR 14.1.0 installed in EMS_Application
+- [x] `ValidationBehavior<TRequest, TResponse>` — automatic validation pipeline (replaces manual validation in handlers)
+  - Injects `IEnumerable<IValidator<TRequest>>` — skips if no validator exists for the request type
+  - Uses `Task.WhenAll` for parallel validator execution
+  - Throws custom `ValidationException` with error dictionary (same format as before)
+- [x] `GetAllDepartmentsQuery : PagedRequest, IRequest<PagedResponse<DepartmentResponse>>` — inherits PagedRequest for reuse
+- [x] `GetAllDepartmentsHandler` — full caching logic, only injects IUnitOfWork + IMemoryCache
+- [x] `GetDepartmentByIdQuery : IRequest<DepartmentResponse>` — just `int Id`
+- [x] `GetDepartmentByIdHandler` — only injects IUnitOfWork
+- [x] DependencyInjection.cs: AddMediatR + ValidationBehavior registered as IPipelineBehavior
+- [x] DepartmentController: dual injection (IMediator for reads, IDepartmentService for writes — transitional)
+- [x] Folder structure: `Features/Departments/Queries/GetAllDepartments/` and `GetDepartmentById/`
+
+**How MediatR discovers handlers (the matching mechanism):**
+At startup, `RegisterServicesFromAssembly` scans for all `IRequestHandler<T,R>` implementations and registers them in DI. At runtime, when you call `_mediator.Send(query)`, MediatR looks at the type of the object (e.g., `GetAllDepartmentsQuery`), resolves `IRequestHandler<GetAllDepartmentsQuery, PagedResponse<DepartmentResponse>>` from DI, and calls its `Handle` method. The generic type parameter IS the key.
+
+### Remaining Sprints:
+- [ ] Sprint 2: Department Commands (Create, Update, Delete → handlers, remove DepartmentService)
+- [ ] Sprint 3: Employee Queries + Commands (full refactor)
+- [ ] Sprint 4: Auth Commands + Notifications (domain events for cache invalidation)
+- [ ] Sprint 5: LoggingBehavior
 
 **Interview topics this covers:**
 - "What is CQRS and when would you use it?"
-- "How does MediatR work?"
-- "What are Pipeline Behaviors?"
+- "How does MediatR work? How does it find the right handler?"
+- "What are Pipeline Behaviors? How are they different from HTTP middleware?"
+- "What's the difference between Send and Publish in MediatR?"
 - "How do you handle domain events?"
+- "Can you implement CQRS without MediatR?"
+- "What are the downsides of CQRS?"
 
-**Deliverable:** Leave management with full CQRS, domain events, and pipeline behaviors.
+**Deliverable:** All endpoints refactored to CQRS with MediatR, pipeline behaviors for validation and logging.
 
 ---
 

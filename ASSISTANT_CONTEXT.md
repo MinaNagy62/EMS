@@ -13,7 +13,7 @@ I am a .NET developer with 3 years of experience. I'm building this project to m
 
 ---
 
-## Current Project Structure (ACTUAL — M4 COMPLETED)
+## Current Project Structure (ACTUAL — M5 IN PROGRESS)
 ```
 EMS/
 ├── EMS_API/
@@ -69,8 +69,19 @@ EMS/
 │   ├── Mapping/
 │   │   ├── DepartmentMapping.cs
 │   │   └── EmployeeMapping.cs
+│   ├── Behaviors/                                 ← M5
+│   │   └── ValidationBehavior.cs
+│   ├── Features/                                  ← M5
+│   │   └── Departments/
+│   │       └── Queries/
+│   │           ├── GetAllDepartments/
+│   │           │   ├── GetAllDepartmentsQuery.cs
+│   │           │   └── GetAllDepartmentsHandler.cs
+│   │           └── GetDepartmentById/
+│   │               ├── GetDepartmentByIdQuery.cs
+│   │               └── GetDepartmentByIdHandler.cs
 │   ├── Services/
-│   │   ├── DepartmentService.cs
+│   │   ├── DepartmentService.cs                   ← partially replaced by handlers (writes still here)
 │   │   ├── EmployeeService.cs
 │   │   └── AuthService.cs                         ← M3
 │   ├── Validators/
@@ -117,7 +128,7 @@ EMS/
 
 **NuGet Packages installed:**
 - EMS_API: Microsoft.AspNetCore.OpenApi (10.0.2), Microsoft.EntityFrameworkCore.Design (10.0.3), Swashbuckle.AspNetCore (10.1.4), Microsoft.AspNetCore.Authentication.JwtBearer (10.0.3)
-- EMS_Application: Microsoft.Extensions.DependencyInjection.Abstractions (10.0.3), FluentValidation.DependencyInjectionExtensions (12.1.1), BCrypt.Net-Next (4.1.0), Microsoft.Extensions.Options (10.0.3), Microsoft.Extensions.Caching.Memory (10.0.3)
+- EMS_Application: Microsoft.Extensions.DependencyInjection.Abstractions (10.0.3), FluentValidation.DependencyInjectionExtensions (12.1.1), BCrypt.Net-Next (4.1.0), Microsoft.Extensions.Options (10.0.3), Microsoft.Extensions.Caching.Memory (10.0.3), MediatR (14.1.0)
 - EMS_Infrastructure: Microsoft.EntityFrameworkCore.SqlServer (10.0.3), Microsoft.EntityFrameworkCore.Tools (10.0.3)
 - EMS_Domain: none
 
@@ -184,7 +195,7 @@ EMS/
 | 2 | DTOs, Validation & Error Handling | COMPLETED (Score: 8.5/10) |
 | 3 | Authentication & Authorization | COMPLETED (Score: 8.5/10) |
 | 4 | Advanced Querying & Performance | COMPLETED (Score: 9/10) |
-| 5 | CQRS with MediatR | Not Started |
+| 5 | CQRS with MediatR | IN PROGRESS (Sprint 1 done: 9.5/10) |
 | 6 | Background Jobs, Logging & Polish | Not Started |
 
 ---
@@ -274,14 +285,43 @@ EMS/
 
 ---
 
+## Milestone 5 — IN PROGRESS (Sprint 1: 9.5/10)
+
+### What is CQRS?
+CQRS (Command Query Responsibility Segregation) splits reads and writes into separate models. Instead of one service class with 5+ methods, each operation becomes its own pair: a Request class (Command or Query) + a Handler class.
+- **Command** = changes state (Create, Update, Delete). Implements `IRequest<TResponse>`.
+- **Query** = reads state (GetAll, GetById). Implements `IRequest<TResponse>`.
+- **Handler** = does the work. Implements `IRequestHandler<TRequest, TResponse>`. One handler per command/query.
+
+### What is MediatR?
+An in-process message dispatcher. Controller calls `_mediator.Send(query)` → MediatR finds the handler that matches the request type (via generic type parameter in `IRequestHandler<TRequest, TResponse>`) → calls `Handle()` → returns result. Auto-discovers handlers via assembly scanning (`RegisterServicesFromAssembly`).
+
+### What are Pipeline Behaviors?
+MediatR's middleware. Implements `IPipelineBehavior<TRequest, TResponse>`. Wraps every request — `next()` calls the next behavior or handler (like `_next(context)` in HTTP middleware). Used for validation, logging, caching as cross-cutting concerns.
+
+### Sprint 1 delivered:
+- `ValidationBehavior<TRequest, TResponse>` — runs FluentValidation automatically before every handler
+- `GetAllDepartmentsQuery : PagedRequest, IRequest<...>` — inherits PagedRequest for reuse
+- `GetAllDepartmentsHandler` — includes caching, only injects IUnitOfWork + IMemoryCache
+- `GetDepartmentByIdQuery` / `GetDepartmentByIdHandler` — clean, minimal
+- DependencyInjection.cs: `AddMediatR(cfg => cfg.RegisterServicesFromAssembly(...))` + `AddTransient(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>))`
+- DepartmentController: dual injection — `IMediator` for reads, `IDepartmentService` for writes (transitional)
+
+### Remaining:
+- Sprint 2: Department Commands (Create/Update/Delete handlers, remove DepartmentService)
+- Sprint 3: Employee Queries + Commands
+- Sprint 4: Auth Commands + Notifications
+- Sprint 5: LoggingBehavior
+
+---
+
 ## Rules for All Milestones
 - NO AutoMapper — manual mapping only
 - Controllers must be thin — no try-catch (middleware handles everything)
-- Validation happens in the service layer (inject IValidator), not controller
+- Validation happens via ValidationBehavior (M5+) or in the service layer (pre-M5)
 - Middleware handles ALL exceptions
-- Validation uses ValidationExtensions.ToErrorDictionary() helper
 - All responses wrapped in ApiResponse<T>
-- Services return DTOs, never entities
+- Services/Handlers return DTOs, never entities
 - All config values read from settings (no hardcoded magic numbers) — use Options pattern
 
 ---
@@ -369,6 +409,18 @@ EMS/
 8. How do you invalidate related cache entries? What is CancellationTokenSource approach?
 9. Why cache DTOs and not EF Core entities?
 10. Where should filter logic live — service or repository? Why?
+
+### After Milestone 5 (in progress):
+1. What is CQRS and when would you use it?
+2. How does MediatR work? How does it find the right handler?
+3. What are Pipeline Behaviors? How are they different from HTTP middleware?
+4. What's the difference between Send and Publish in MediatR?
+5. How does the ValidationBehavior know which validator to use?
+6. Can you implement CQRS without MediatR?
+7. What are the downsides of CQRS?
+8. Where does validation happen in a CQRS architecture?
+9. How do you handle cross-cutting concerns in CQRS?
+10. What are Commands vs Queries? What's the difference?
 
 ---
 

@@ -8,7 +8,7 @@ Everything you need to understand this project, top to bottom. Every file, every
 
 An **Employee Management System (EMS)** REST API. It manages **Departments**, **Employees**, and **User Authentication**. Built with .NET 10, SQL Server, Entity Framework Core, and JWT authentication. The goal is to learn and demonstrate backend patterns for interviews.
 
-**Current status:** Milestone 1 (COMPLETED), Milestone 2 (COMPLETED), Milestone 3 (COMPLETED), Milestone 4 (COMPLETED).
+**Current status:** Milestone 1 (COMPLETED), Milestone 2 (COMPLETED), Milestone 3 (COMPLETED), Milestone 4 (COMPLETED), Milestone 5 (IN PROGRESS).
 
 ---
 
@@ -421,13 +421,93 @@ This is a **POCO class** that maps 1:1 to the `JwtSettings` section in `appsetti
 
 **Why BCrypt instead of SHA256?** BCrypt is intentionally slow (configurable work factor) and automatically generates a unique salt per hash. SHA256 is fast (bad for passwords — allows brute-force attacks) and requires you to manage salts manually. Every security expert recommends BCrypt/scrypt/Argon2 for password hashing.
 
-#### 3.2.8 DependencyInjection (`DependencyInjection.cs`)
+#### 3.2.8 CQRS with MediatR — Added in M5
+
+**Why CQRS?** The `DepartmentService` handled 5 methods with 4 injected dependencies. Every method paid the cost of every dependency, even ones it didn't use (e.g., `GetAllDepartmentsAsync` doesn't need validators). CQRS splits each operation into its own handler with only the dependencies it needs.
+
+**The Pattern:**
+- **Command** = write operation (Create, Update, Delete). Changes database state.
+- **Query** = read operation (GetAll, GetById). Only reads data.
+- Each implements `IRequest<TResponse>` — the return type.
+- Each has a **Handler** implementing `IRequestHandler<TRequest, TResponse>` — one `Handle()` method.
+- **MediatR** dispatches: controller calls `_mediator.Send(request)`, MediatR finds the matching handler via generic type matching in DI, calls `Handle()`.
+
+**How MediatR finds the right handler:**
+At startup, `RegisterServicesFromAssembly` scans for all `IRequestHandler<T,R>` implementations and registers them in DI. At runtime, when you call `_mediator.Send(query)`, MediatR resolves `IRequestHandler<GetAllDepartmentsQuery, PagedResponse<DepartmentResponse>>` from the container. The generic type parameter on the handler is the matching key — same concept as how FluentValidation matches `IValidator<CreateDepartmentCommand>` to `CreateDepartmentValidator`.
+
+##### Behaviors (`Behaviors/`)
+
+**ValidationBehavior\<TRequest, TResponse\>** — MediatR's equivalent of HTTP middleware. Implements `IPipelineBehavior<TRequest, TResponse>`.
+
+How it works:
+1. MediatR calls the behavior **before** every handler
+2. Behavior injects `IEnumerable<IValidator<TRequest>>` — if a validator exists for the request type, it's injected by DI
+3. If no validator exists, the collection is empty → skips validation
+4. If validation fails, throws `ValidationException` **before** the handler runs
+5. `next()` calls the next behavior or the handler — like `await _next(context)` in HTTP middleware
+
+```
+Request arrives
+  → ValidationBehavior (validates, throws if invalid)
+    → Handler (does the actual work)
+  ← ValidationBehavior
+Response returned
+```
+
+This replaces the manual validation code that was duplicated in every service method:
+```csharp
+// BEFORE (in every service method):
+var result = await _validator.ValidateAsync(request);
+if (!result.IsValid)
+    throw new ValidationException(result.ToErrorDictionary());
+
+// AFTER: ValidationBehavior does this automatically. Handlers never touch validation.
+```
+
+Uses `Task.WhenAll` to run multiple validators in parallel. Error dictionary built with GroupBy/ToDictionary — same format as before, so the exception middleware still returns field-level errors.
+
+##### Features (`Features/Departments/Queries/`)
+
+Each feature is organized by domain → operation type → specific operation:
+```
+Features/Departments/Queries/GetAllDepartments/
+├── GetAllDepartmentsQuery.cs     ← IRequest<PagedResponse<DepartmentResponse>>
+└── GetAllDepartmentsHandler.cs   ← IRequestHandler<...>
+```
+
+**GetAllDepartmentsQuery** — Inherits from `PagedRequest` (reuses PageNumber, PageSize, SortBy, SortDescending) and implements `IRequest<PagedResponse<DepartmentResponse>>`. Adds `Search` and `IsActive` as department-specific filters. The controller binds it directly from `[FromQuery]`.
+
+**GetAllDepartmentsHandler** — Only injects `IUnitOfWork` + `IMemoryCache` (not validators — the ValidationBehavior handles that). Contains the same caching logic that was in DepartmentService. `InvalidateCache()` is `public static` so command handlers can call it when departments change.
+
+**GetDepartmentByIdQuery** — Just `int Id`. Implements `IRequest<DepartmentResponse>`.
+
+**GetDepartmentByIdHandler** — Only injects `IUnitOfWork`. FindAsync + NotFoundException if null. Minimal.
+
+##### CQRS in the Controller
+
+```
+// BEFORE: Controller injects IDepartmentService
+// AFTER:  Controller injects IMediator (+ IDepartmentService temporarily for writes)
+
+[HttpGet]
+public async Task<IActionResult> GetAll([FromQuery] GetAllDepartmentsQuery query)
+{
+    var result = await _mediator.Send(query);  // MediatR finds GetAllDepartmentsHandler
+    return Ok(ApiResponse<...>.SuccessResponse(result));
+}
+```
+
+The controller never knows which handler runs. It just sends the request and wraps the response. Adding a new endpoint = one new `_mediator.Send()` + a new Query/Handler pair in a new folder.
+
+#### 3.2.9 DependencyInjection (`DependencyInjection.cs`)
 
 Extension method `AddApplication()` that registers:
-- `IDepartmentService` → `DepartmentService` (Scoped)
+- `IDepartmentService` → `DepartmentService` (Scoped) — transitional, being replaced by handlers in M5
 - `IEmployeeService` → `EmployeeService` (Scoped)
 - `IAuthService` → `AuthService` (Scoped) — Added in M3
 - All FluentValidation validators from the assembly (auto-scan)
+- MediatR with assembly scanning — `AddMediatR(cfg => cfg.RegisterServicesFromAssembly(...))` (Added in M5)
+- `ValidationBehavior<,>` as `IPipelineBehavior<,>` (Transient) — Added in M5
 
 Called in `Program.cs` as `builder.Services.AddApplication()`.
 
@@ -900,6 +980,9 @@ The refresh endpoint takes a `RefreshTokenRequest` DTO (just `{ "refreshToken": 
 | **Cache-Aside** | DepartmentService + IMemoryCache | Check cache first, query DB on miss, store result. Invalidate on writes (M4) |
 | **Expression Trees** | GenericRepository.ApplySorting | Build LINQ expressions dynamically at runtime from string property names (M4) |
 | **Inheritance Constraint** | BaseEntity + `where T : BaseEntity` | Guarantees Id exists on all entities for deterministic sorting (M4) |
+| **CQRS** | Features/Commands + Queries | Separates reads from writes — each operation in its own handler (M5) |
+| **Mediator Pattern** | MediatR + IMediator | Decouples sender (controller) from handler — controller doesn't know which class handles the request (M5) |
+| **Pipeline Behavior** | ValidationBehavior | MediatR middleware — wraps every request for cross-cutting concerns (M5) |
 
 ---
 
@@ -965,8 +1048,19 @@ EMS/
 │   ├── Mapping/
 │   │   ├── DepartmentMapping.cs
 │   │   └── EmployeeMapping.cs
+│   ├── Behaviors/                      ← M5
+│   │   └── ValidationBehavior.cs
+│   ├── Features/                       ← M5
+│   │   └── Departments/
+│   │       └── Queries/
+│   │           ├── GetAllDepartments/
+│   │           │   ├── GetAllDepartmentsQuery.cs
+│   │           │   └── GetAllDepartmentsHandler.cs
+│   │           └── GetDepartmentById/
+│   │               ├── GetDepartmentByIdQuery.cs
+│   │               └── GetDepartmentByIdHandler.cs
 │   ├── Services/
-│   │   ├── DepartmentService.cs
+│   │   ├── DepartmentService.cs        ← partially replaced by handlers (M5)
 │   │   ├── EmployeeService.cs
 │   │   └── AuthService.cs             ← M3
 │   └── Validators/
@@ -1023,6 +1117,7 @@ EMS/
 | EMS_Application | BCrypt.Net-Next | 4.1.0 | Password hashing (M3) |
 | EMS_Application | Microsoft.Extensions.Options | 10.0.3 | `IOptions<T>` for strongly-typed config (M3) |
 | EMS_Application | Microsoft.Extensions.Caching.Memory | 10.0.3 | `IMemoryCache` for in-memory caching (M4) |
+| EMS_Application | MediatR | 14.1.0 | CQRS dispatcher — `IMediator`, `IRequest`, `IRequestHandler`, `IPipelineBehavior` (M5) |
 | EMS_Infrastructure | Microsoft.EntityFrameworkCore.SqlServer | 10.0.3 | SQL Server database provider |
 | EMS_Infrastructure | Microsoft.EntityFrameworkCore.Tools | 10.0.3 | Migrations CLI (`dotnet ef`) |
 | EMS_API | Microsoft.AspNetCore.OpenApi | 10.0.2 | OpenAPI metadata |
@@ -1065,12 +1160,15 @@ EMS/
 - **Milestone 3:** Authentication & Authorization (Score: 8.5/10) ✓
 - **Milestone 4:** Advanced Querying & Performance (Score: 9/10) ✓
 
-### Milestone 5: CQRS with MediatR (NOT STARTED)
-- MediatR setup (Commands & Queries)
-- CQRS pattern (separate read/write models)
-- Pipeline Behaviors (logging, validation)
-- Leave Request feature (Apply, Approve, Reject)
-- Domain Events + Notification handlers
+### Milestone 5: CQRS with MediatR (IN PROGRESS — Sprint 1 done)
+- ✅ MediatR 14.1.0 installed + registered with assembly scanning
+- ✅ ValidationBehavior — automatic validation pipeline
+- ✅ Department Queries refactored to handlers (GetAll, GetById)
+- ⬜ Department Commands (Create, Update, Delete → handlers, remove DepartmentService)
+- ⬜ Employee Queries + Commands (full refactor)
+- ⬜ Auth Commands (Register, Login, Refresh)
+- ⬜ LoggingBehavior
+- ⬜ Notifications / Domain Events (cache invalidation via INotification)
 
 ### Milestone 6: Background Jobs, Logging & Polish (NOT STARTED)
 - Serilog structured logging

@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>M5 Sprint 1 — MediatR & CQRS Explained</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.7; padding: 40px 20px; }
+        .container { max-width: 900px; margin: 0 auto; }
+        h1 { color: #38bdf8; font-size: 2em; margin-bottom: 10px; }
+        h2 { color: #f472b6; font-size: 1.5em; margin: 40px 0 15px; border-bottom: 2px solid #334155; padding-bottom: 8px; }
+        h3 { color: #a78bfa; font-size: 1.2em; margin: 25px 0 10px; }
+        p { margin: 10px 0; color: #cbd5e1; }
+        .subtitle { color: #94a3b8; font-size: 1.1em; margin-bottom: 30px; }
+        code { background: #1e293b; color: #67e8f9; padding: 2px 8px; border-radius: 4px; font-size: 0.9em; }
+        pre { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 20px; overflow-x: auto; margin: 15px 0; font-size: 0.85em; line-height: 1.6; }
+        pre code { background: none; padding: 0; }
+        .highlight { color: #4ade80; }
+        .warning { color: #fbbf24; }
+        .box { background: #1e293b; border-left: 4px solid #38bdf8; padding: 15px 20px; margin: 15px 0; border-radius: 0 8px 8px 0; }
+        .box-pink { border-left-color: #f472b6; }
+        .box-green { border-left-color: #4ade80; }
+        .box-yellow { border-left-color: #fbbf24; }
+        .diagram { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 20px; margin: 15px 0; font-family: monospace; white-space: pre; font-size: 0.85em; line-height: 1.8; }
+        .step { background: #1e293b; border-radius: 8px; padding: 20px; margin: 20px 0; border: 1px solid #334155; }
+        .step-number { background: #38bdf8; color: #0f172a; width: 30px; height: 30px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-weight: bold; margin-right: 10px; }
+        table { width: 100%; border-collapse: collapse; margin: 15px 0; }
+        th { background: #1e293b; color: #38bdf8; padding: 12px; text-align: left; border: 1px solid #334155; }
+        td { padding: 12px; border: 1px solid #334155; }
+        .file-path { color: #fbbf24; font-family: monospace; font-size: 0.85em; }
+        hr { border: none; border-top: 1px solid #334155; margin: 30px 0; }
+    </style>
+</head>
+<body>
+<div class="container">
+
+    <h1>M5 Sprint 1 — MediatR & CQRS</h1>
+    <p class="subtitle">Everything explained step by step, in simple words.</p>
+
+    <!-- ==================== SECTION 1 ==================== -->
+    <h2>1. What Problem Are We Solving?</h2>
+
+    <h3>Before (Old Way — Service Pattern)</h3>
+    <p>The controller calls the service directly. The service does everything: validation, business logic, database calls, caching.</p>
+
+    <div class="diagram">Controller ──→ DepartmentService ──→ Repository ──→ Database
+
+The service has ALL methods:
+  - GetAllDepartmentsAsync()    ← read
+  - GetDepartmentByIdAsync()    ← read
+  - CreateDepartmentAsync()     ← write
+  - UpdateDepartmentAsync()     ← write
+  - DeleteDepartmentAsync()     ← write</div>
+
+    <p><span class="warning">The problem:</span> As the project grows, the service becomes a giant file with 500+ lines. Reads and writes are mixed together. Every method has different dependencies. Hard to test, hard to maintain.</p>
+
+    <h3>After (New Way — CQRS with MediatR)</h3>
+    <p><strong>CQRS</strong> = Command Query Responsibility Segregation. Big name, simple idea:</p>
+
+    <div class="box">
+        <p><span class="highlight">Queries</span> = reading data (GET). Each query is its own class + handler.</p>
+        <p><span class="highlight">Commands</span> = changing data (POST/PUT/DELETE). Each command is its own class + handler.</p>
+        <p>They are <strong>separated</strong>. Each operation lives in its own file with only the dependencies it needs.</p>
+    </div>
+
+    <div class="diagram">Controller ──→ IMediator ──→ finds the right Handler ──→ Repository
+
+GET /department     → GetAllDepartmentsQuery    → GetAllDepartmentsHandler
+GET /department/5   → GetDepartmentByIdQuery    → GetDepartmentByIdHandler
+POST /department    → CreateDepartmentCommand   → CreateDepartmentHandler  (Sprint 2)
+PUT /department/5   → UpdateDepartmentCommand   → UpdateDepartmentHandler  (Sprint 2)
+DELETE /department  → DeleteDepartmentCommand   → DeleteDepartmentHandler  (Sprint 2)</div>
+
+    <h3>What is MediatR?</h3>
+    <p>MediatR is a library that acts as a <strong>middleman</strong> (mediator). The controller doesn't know which handler exists. It just says "here's a request, find someone who can handle it."</p>
+
+    <div class="diagram">Controller:  "Hey MediatR, here's a GetAllDepartmentsQuery"
+MediatR:     "Let me find who handles that..."
+MediatR:     "Found it! GetAllDepartmentsHandler, here you go."
+Handler:     *does the work, returns the result*
+MediatR:     "Controller, here's your result."</div>
+
+    <p>The controller never imports or knows about the handler. MediatR connects them automatically based on the types.</p>
+
+    <!-- ==================== SECTION 2 ==================== -->
+    <h2>2. The Folder Structure</h2>
+
+    <pre><code>EMS_Application/
+├── Behaviors/
+│   └── ValidationBehavior.cs              ← auto-validates every request
+├── Features/
+│   └── Departments/
+│       └── Queries/
+│           ├── GetAllDepartments/
+│           │   ├── GetAllDepartmentsQuery.cs      ← "what I want"
+│           │   └── GetAllDepartmentsHandler.cs     ← "how to get it"
+│           └── GetDepartmentById/
+│               ├── GetDepartmentByIdQuery.cs       ← "what I want"
+│               └── GetDepartmentByIdHandler.cs      ← "how to get it"
+├── Services/
+│   └── DepartmentService.cs              ← still has Create/Update/Delete (for now)</code></pre>
+
+    <p>Each feature is a folder with 2 files: the <strong>Query</strong> (what you want) and the <strong>Handler</strong> (how to do it). Everything related to "get all departments" lives in one folder. Clean and easy to find.</p>
+
+    <!-- ==================== SECTION 3 ==================== -->
+    <h2>3. Step-by-Step: What Each File Does</h2>
+
+    <!-- Step 1 -->
+    <div class="step">
+        <p><span class="step-number">1</span><strong>Install MediatR Package</strong></p>
+        <p class="file-path">dotnet add package MediatR</p>
+        <p>This gives us the <code>IMediator</code>, <code>IRequest&lt;T&gt;</code>, <code>IRequestHandler&lt;TRequest, TResponse&gt;</code>, and <code>IPipelineBehavior</code> interfaces.</p>
+    </div>
+
+    <!-- Step 2 -->
+    <div class="step">
+        <p><span class="step-number">2</span><strong>Register MediatR in DependencyInjection.cs</strong></p>
+        <p class="file-path">EMS_Application/DependencyInjection.cs</p>
+        <pre><code>services.AddMediatR(cfg =>
+    cfg.RegisterServicesFromAssembly(Assembly.GetExecutingAssembly()));
+
+services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));</code></pre>
+
+        <p><code>RegisterServicesFromAssembly</code> tells MediatR: "Scan this project. Find every class that implements <code>IRequestHandler</code> and register it automatically." You never manually register handlers — MediatR discovers them.</p>
+        <p><code>AddTransient(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>))</code> tells MediatR: "Before any handler runs, run the ValidationBehavior first." It's like middleware but for MediatR.</p>
+    </div>
+
+    <!-- Step 3 -->
+    <div class="step">
+        <p><span class="step-number">3</span><strong>GetAllDepartmentsQuery — The Request</strong></p>
+        <p class="file-path">Features/Departments/Queries/GetAllDepartments/GetAllDepartmentsQuery.cs</p>
+        <pre><code>public class GetAllDepartmentsQuery : PagedRequest, IRequest&lt;PagedResponse&lt;DepartmentResponse&gt;&gt;
+{
+    public string? Search { get; set; }
+    public bool? IsActive { get; set; }
+}</code></pre>
+
+        <p>This is just a data class. It says:</p>
+        <ul style="margin-left: 20px; margin-top: 5px;">
+            <li>I inherit from <code>PagedRequest</code> → so I have PageNumber, PageSize, SortBy, SortDescending</li>
+            <li>I add Search and IsActive → same as the old DepartmentQueryRequest</li>
+            <li><code>IRequest&lt;PagedResponse&lt;DepartmentResponse&gt;&gt;</code> → "I'm a request, and my answer will be a PagedResponse of DepartmentResponse"</li>
+        </ul>
+
+        <div class="box box-green">
+            <p><strong>Why not reuse DepartmentQueryRequest?</strong> Because in CQRS, the query IS the request. It implements <code>IRequest&lt;T&gt;</code> which MediatR needs to route it to the right handler. DepartmentQueryRequest was just a DTO — it didn't implement IRequest.</p>
+        </div>
+    </div>
+
+    <!-- Step 4 -->
+    <div class="step">
+        <p><span class="step-number">4</span><strong>GetAllDepartmentsHandler — The Logic</strong></p>
+        <p class="file-path">Features/Departments/Queries/GetAllDepartments/GetAllDepartmentsHandler.cs</p>
+        <pre><code>public class GetAllDepartmentsHandler
+    : IRequestHandler&lt;GetAllDepartmentsQuery, PagedResponse&lt;DepartmentResponse&gt;&gt;
+{
+    private readonly IUnitOfWork _unitOfWork;
+    private readonly IMemoryCache _cache;
+
+    public async Task&lt;PagedResponse&lt;DepartmentResponse&gt;&gt; Handle(
+        GetAllDepartmentsQuery request,
+        CancellationToken cancellationToken)
+    {
+        // 1. Check cache
+        // 2. Build filters
+        // 3. Query database
+        // 4. Store in cache
+        // 5. Return result
+    }
+}</code></pre>
+
+        <p><code>IRequestHandler&lt;TRequest, TResponse&gt;</code> tells MediatR: "I handle GetAllDepartmentsQuery and return PagedResponse&lt;DepartmentResponse&gt;."</p>
+        <p>The logic is <strong>exactly the same</strong> as what was in DepartmentService.GetAllDepartmentsAsync — it just moved here. Same caching, same filters, same mapping.</p>
+
+        <div class="box">
+            <p><strong>Key point:</strong> This handler only injects what it needs — <code>IUnitOfWork</code> and <code>IMemoryCache</code>. It doesn't need validators for Create/Update. In the old service, every method shared the same constructor with ALL dependencies, even if a specific method didn't need them.</p>
+        </div>
+    </div>
+
+    <!-- Step 5 -->
+    <div class="step">
+        <p><span class="step-number">5</span><strong>GetDepartmentByIdQuery + Handler</strong></p>
+        <p class="file-path">Features/Departments/Queries/GetDepartmentById/</p>
+        <pre><code>// Query — just an Id
+public class GetDepartmentByIdQuery : IRequest&lt;DepartmentResponse&gt;
+{
+    public int Id { get; set; }
+}
+
+// Handler — find it or throw
+public class GetDepartmentByIdHandler
+    : IRequestHandler&lt;GetDepartmentByIdQuery, DepartmentResponse&gt;
+{
+    public async Task&lt;DepartmentResponse&gt; Handle(...)
+    {
+        var department = await _unitOfWork.Departments.FindAsync(
+            d => d.Id == request.Id && d.IsActive);
+
+        if (department is null)
+            throw new NotFoundException("Department", request.Id);
+
+        return department.ToResponse();
+    }
+}</code></pre>
+        <p>Same pattern. Query = what I want. Handler = how to get it. This handler only needs <code>IUnitOfWork</code> — nothing else.</p>
+    </div>
+
+    <!-- Step 6 -->
+    <div class="step">
+        <p><span class="step-number">6</span><strong>ValidationBehavior — Auto Validation</strong></p>
+        <p class="file-path">Behaviors/ValidationBehavior.cs</p>
+
+        <p>This is a <strong>MediatR pipeline behavior</strong>. Think of it like middleware, but for MediatR requests instead of HTTP requests:</p>
+
+        <div class="diagram">HTTP Request → Middleware Pipeline → Controller
+                                              ↓
+               MediatR Request → <span class="highlight">ValidationBehavior</span> → Handler</div>
+
+        <pre><code>public class ValidationBehavior&lt;TRequest, TResponse&gt;
+    : IPipelineBehavior&lt;TRequest, TResponse&gt;
+{
+    private readonly IEnumerable&lt;IValidator&lt;TRequest&gt;&gt; _validators;
+
+    public async Task&lt;TResponse&gt; Handle(
+        TRequest request,
+        RequestHandlerDelegate&lt;TResponse&gt; next,
+        CancellationToken cancellationToken)
+    {
+        // 1. No validators registered for this request? Skip.
+        if (!_validators.Any())
+            return await next();
+
+        // 2. Run all validators
+        var validationResults = await Task.WhenAll(
+            _validators.Select(v => v.ValidateAsync(context)));
+
+        // 3. Collect errors
+        var errors = validationResults
+            .SelectMany(r => r.Errors)
+            .Where(f => f is not null)
+            .ToList();
+
+        // 4. Errors found? Throw. Handler never runs.
+        if (errors.Count > 0)
+            throw new ValidationException(errorDictionary);
+
+        // 5. No errors? Call the actual handler.
+        return await next();
+    }
+}</code></pre>
+
+        <p>How it works step by step:</p>
+        <div class="box box-pink">
+            <p><strong>1.</strong> MediatR receives a request (e.g., GetAllDepartmentsQuery)</p>
+            <p><strong>2.</strong> Before calling the handler, it runs ValidationBehavior</p>
+            <p><strong>3.</strong> ValidationBehavior asks DI: "Are there any <code>IValidator&lt;GetAllDepartmentsQuery&gt;</code> registered?"</p>
+            <p><strong>4.</strong> If yes → run them. If validation fails → throw ValidationException. Handler never executes.</p>
+            <p><strong>5.</strong> If no validators exist OR validation passes → <code>next()</code> calls the actual handler.</p>
+        </div>
+
+        <p><span class="highlight">Why is this better?</span> In the old service, every method had to manually call the validator:</p>
+        <pre><code>// OLD — manual validation in every method
+var validationResult = await _createValidator.ValidateAsync(request);
+if (!validationResult.IsValid)
+    throw new ValidationException(validationResult.ToErrorDictionary());
+
+// NEW — automatic. Just create a validator class and it runs automatically.
+// The handler doesn't even know validation exists.</code></pre>
+
+        <p><code>IEnumerable&lt;IValidator&lt;TRequest&gt;&gt;</code> — DI injects ALL validators for this request type. If there are none, the list is empty (not null), so <code>_validators.Any()</code> returns false and we skip validation.</p>
+    </div>
+
+    <!-- Step 7 -->
+    <div class="step">
+        <p><span class="step-number">7</span><strong>Updated DepartmentController</strong></p>
+        <p class="file-path">EMS_API/Controllers/DepartmentController.cs</p>
+        <pre><code>public class DepartmentController : ControllerBase
+{
+    private readonly IMediator _mediator;                 // NEW — for reads
+    private readonly IDepartmentService _departmentService; // OLD — for writes (temporary)
+
+    // GET — uses MediatR
+    [HttpGet]
+    public async Task&lt;IActionResult&gt; GetAll([FromQuery] GetAllDepartmentsQuery query)
+    {
+        var departments = await _mediator.Send(query);
+        return Ok(ApiResponse&lt;...&gt;.SuccessResponse(departments));
+    }
+
+    [HttpGet("{id}")]
+    public async Task&lt;IActionResult&gt; GetById(int id)
+    {
+        var department = await _mediator.Send(new GetDepartmentByIdQuery { Id = id });
+        return Ok(ApiResponse&lt;...&gt;.SuccessResponse(department));
+    }
+
+    // POST/PUT/DELETE — still uses old service (migrating in Sprint 2)
+    [HttpPost]
+    public async Task&lt;IActionResult&gt; Create([FromBody] CreateDepartmentRequest request)
+    {
+        var created = await _departmentService.CreateDepartmentAsync(request);
+        ...
+    }
+}</code></pre>
+
+        <p>Notice how clean the GET endpoints are. The controller doesn't know about caching, filters, or database queries. It just says <code>_mediator.Send(query)</code> and gets a result.</p>
+
+        <div class="box box-yellow">
+            <p><strong>Why both IMediator and IDepartmentService?</strong> This is temporary. We migrated reads to MediatR in Sprint 1. Writes (Create/Update/Delete) still use the old service. Sprint 2 will convert those to Commands, and then we'll remove IDepartmentService entirely.</p>
+        </div>
+    </div>
+
+    <!-- Step 8 -->
+    <div class="step">
+        <p><span class="step-number">8</span><strong>Updated DepartmentService — Write-Only Now</strong></p>
+        <p class="file-path">EMS_Application/Services/DepartmentService.cs</p>
+        <p>Removed: <code>GetAllDepartmentsAsync()</code> and <code>GetDepartmentByIdAsync()</code> — they moved to handlers.</p>
+        <p>Removed: All caching code — the handler owns caching now.</p>
+        <p>Kept: Create, Update, Delete — still here until Sprint 2.</p>
+        <p>Added: <code>GetAllDepartmentsHandler.InvalidateCache()</code> — when a write happens, we still need to clear the cache that the handler manages.</p>
+    </div>
+
+    <!-- ==================== SECTION 4 ==================== -->
+    <h2>4. The Full Flow — How a Request Travels</h2>
+
+    <h3>GET /api/department?search=HR&pageSize=5</h3>
+    <div class="diagram">
+1. Client sends GET request
+         ↓
+2. ASP.NET model binding creates GetAllDepartmentsQuery
+   { Search = "HR", PageSize = 5, PageNumber = 1 (default) }
+         ↓
+3. Controller calls _mediator.Send(query)
+         ↓
+4. MediatR looks at the type: GetAllDepartmentsQuery
+   It knows GetAllDepartmentsHandler handles this type
+         ↓
+5. <span class="highlight">Before the handler runs</span> → ValidationBehavior executes
+   → Checks: any IValidator&lt;GetAllDepartmentsQuery&gt; registered?
+   → No validators → skips validation → calls next()
+         ↓
+6. GetAllDepartmentsHandler.Handle() runs
+   → Checks cache → miss
+   → Builds filters (IsActive=true, Search contains "HR")
+   → Queries database with pagination
+   → Stores result in cache
+   → Returns PagedResponse&lt;DepartmentResponse&gt;
+         ↓
+7. MediatR returns the result to the controller
+         ↓
+8. Controller wraps in ApiResponse and returns 200 OK</div>
+
+    <h3>GET /api/department/5</h3>
+    <div class="diagram">
+1. Controller creates new GetDepartmentByIdQuery { Id = 5 }
+         ↓
+2. _mediator.Send(query)
+         ↓
+3. ValidationBehavior → no validators → skip → next()
+         ↓
+4. GetDepartmentByIdHandler.Handle()
+   → FindAsync(d => d.Id == 5 && d.IsActive)
+   → Found? Return DepartmentResponse
+   → Not found? Throw NotFoundException
+         ↓
+5. Controller wraps in ApiResponse and returns 200 OK</div>
+
+    <!-- ==================== SECTION 5 ==================== -->
+    <h2>5. How MediatR Finds the Right Handler</h2>
+
+    <p>This is the "magic" part. Here's how it actually works:</p>
+
+    <div class="step">
+        <p><strong>At startup:</strong></p>
+        <pre><code>services.AddMediatR(cfg =>
+    cfg.RegisterServicesFromAssembly(Assembly.GetExecutingAssembly()));</code></pre>
+        <p>MediatR scans every class in the assembly. It finds:</p>
+        <pre><code>GetAllDepartmentsHandler : IRequestHandler&lt;GetAllDepartmentsQuery, PagedResponse&lt;...&gt;&gt;
+GetDepartmentByIdHandler : IRequestHandler&lt;GetDepartmentByIdQuery, DepartmentResponse&gt;</code></pre>
+        <p>It registers them in DI automatically:</p>
+        <pre><code>// MediatR does this behind the scenes:
+services.AddTransient&lt;IRequestHandler&lt;GetAllDepartmentsQuery, PagedResponse&lt;...&gt;&gt;,
+                       GetAllDepartmentsHandler&gt;();
+services.AddTransient&lt;IRequestHandler&lt;GetDepartmentByIdQuery, DepartmentResponse&gt;,
+                       GetDepartmentByIdHandler&gt;();</code></pre>
+    </div>
+
+    <div class="step">
+        <p><strong>At runtime:</strong></p>
+        <pre><code>_mediator.Send(new GetAllDepartmentsQuery { ... });</code></pre>
+        <p>MediatR sees the type is <code>GetAllDepartmentsQuery</code>. It asks DI:</p>
+        <p>"Give me the <code>IRequestHandler&lt;GetAllDepartmentsQuery, PagedResponse&lt;...&gt;&gt;</code>"</p>
+        <p>DI returns <code>GetAllDepartmentsHandler</code>. MediatR calls its <code>Handle()</code> method.</p>
+        <p><span class="highlight">It's just dependency injection + generics. No reflection at runtime. No magic.</span></p>
+    </div>
+
+    <!-- ==================== SECTION 6 ==================== -->
+    <h2>6. ValidationBehavior — The Pipeline Concept</h2>
+
+    <p>MediatR has a <strong>pipeline</strong> — behaviors that run before/after every handler, like layers of an onion:</p>
+
+    <div class="diagram">
+Request comes in
+    ↓
+┌─────────────────────────────┐
+│  <span class="highlight">ValidationBehavior</span>          │  ← runs FIRST
+│  (checks for validation     │
+│   errors before handler)    │
+│         ↓                   │
+│  ┌────────────────────┐     │
+│  │  <span class="highlight">Actual Handler</span>     │     │  ← runs if validation passes
+│  │  (does the work)   │     │
+│  └────────────────────┘     │
+│         ↓                   │
+│  Result goes back up        │
+└─────────────────────────────┘
+    ↓
+Response goes out</div>
+
+    <p>You can add more behaviors later:</p>
+    <div class="diagram">
+Request → LoggingBehavior → ValidationBehavior → CachingBehavior → Handler → Response</div>
+
+    <p>Each behavior decides: do I continue to the next one (<code>await next()</code>) or do I stop here (throw exception)?</p>
+
+    <!-- ==================== SECTION 7 ==================== -->
+    <h2>7. Why CQRS? The Benefits</h2>
+
+    <table>
+        <tr>
+            <th>Old Service</th>
+            <th>CQRS with MediatR</th>
+        </tr>
+        <tr>
+            <td>One big service file with all methods</td>
+            <td>Each operation is its own file</td>
+        </tr>
+        <tr>
+            <td>All dependencies injected even if not needed</td>
+            <td>Each handler only injects what it needs</td>
+        </tr>
+        <tr>
+            <td>Manual validation in every method</td>
+            <td>Automatic validation via pipeline behavior</td>
+        </tr>
+        <tr>
+            <td>Controller knows about the service</td>
+            <td>Controller only knows IMediator — fully decoupled</td>
+        </tr>
+        <tr>
+            <td>Hard to add cross-cutting concerns</td>
+            <td>Just add another pipeline behavior (logging, caching, etc.)</td>
+        </tr>
+        <tr>
+            <td>Reads and writes mixed together</td>
+            <td>Queries/ and Commands/ are separate folders</td>
+        </tr>
+    </table>
+
+    <!-- ==================== SECTION 8 ==================== -->
+    <h2>8. The Key Interfaces — Cheat Sheet</h2>
+
+    <table>
+        <tr>
+            <th>Interface</th>
+            <th>What It Does</th>
+            <th>Who Implements It</th>
+        </tr>
+        <tr>
+            <td><code>IRequest&lt;T&gt;</code></td>
+            <td>Marks a class as a MediatR request that returns T</td>
+            <td>Query and Command classes</td>
+        </tr>
+        <tr>
+            <td><code>IRequestHandler&lt;TRequest, TResponse&gt;</code></td>
+            <td>Handles a specific request type</td>
+            <td>Handler classes</td>
+        </tr>
+        <tr>
+            <td><code>IMediator</code></td>
+            <td>The middleman — routes requests to handlers</td>
+            <td>Provided by MediatR (you inject it)</td>
+        </tr>
+        <tr>
+            <td><code>IPipelineBehavior&lt;TRequest, TResponse&gt;</code></td>
+            <td>Runs before/after every handler (like middleware)</td>
+            <td>ValidationBehavior, LoggingBehavior, etc.</td>
+        </tr>
+    </table>
+
+    <!-- ==================== SECTION 9 ==================== -->
+    <h2>9. What's Coming in Sprint 2</h2>
+
+    <div class="box box-green">
+        <p><strong>Sprint 2</strong> will convert the 3 write operations (Create, Update, Delete) from the service to MediatR Commands:</p>
+        <pre><code>Features/Departments/Commands/
+├── CreateDepartment/
+│   ├── CreateDepartmentCommand.cs
+│   └── CreateDepartmentHandler.cs
+├── UpdateDepartment/
+│   ├── UpdateDepartmentCommand.cs
+│   └── UpdateDepartmentHandler.cs
+└── DeleteDepartment/
+    ├── DeleteDepartmentCommand.cs
+    └── DeleteDepartmentHandler.cs</code></pre>
+        <p>After that, <code>IDepartmentService</code> and <code>DepartmentService</code> will be deleted entirely. The controller will only use <code>IMediator</code>.</p>
+    </div>
+
+    <hr>
+    <p style="color: #64748b; text-align: center; margin-top: 20px;">EMS Project — Milestone 5, Sprint 1 | Built by Minan</p>
+
+</div>
+</body>
+</html>

@@ -31,7 +31,7 @@
 | Unit Testing & Integration Testing | Not Started | - |
 | API Versioning | Not Started | - |
 | Rate Limiting | Not Started | - |
-| CQRS with MediatR | Not Started | - |
+| CQRS with MediatR | In Progress M5 | MediatR 14.1.0 installed, ValidationBehavior, Department queries refactored to handlers |
 | Specification Pattern | Not Started | - |
 | Dependency Injection (advanced) | Not Started | - |
 
@@ -288,6 +288,30 @@ Static _cacheResetToken is correct because IMemoryCache is singleton and CTS mus
 
 **Milestone 4 Final Score: 9/10**
 
+### Milestone 5 Progress Reviews
+
+#### M5 Review #1 — MediatR Setup + Department Queries (Sprint 1)
+**Score: 9.5/10**
+
+What was completed:
+1. MediatR 14.1.0 installed in EMS_Application
+2. `ValidationBehavior<TRequest, TResponse>` in `Behaviors/` — IPipelineBehavior with IEnumerable<IValidator<TRequest>>, uses Task.WhenAll for parallel validation, throws custom ValidationException
+3. `GetAllDepartmentsQuery : PagedRequest, IRequest<PagedResponse<DepartmentResponse>>` — inherits PagedRequest (smart reuse), adds Search and IsActive
+4. `GetAllDepartmentsHandler` — full caching logic moved from DepartmentService, only injects IUnitOfWork + IMemoryCache (no validators — read handler doesn't need them)
+5. `GetDepartmentByIdQuery : IRequest<DepartmentResponse>` — just int Id
+6. `GetDepartmentByIdHandler` — clean, only injects IUnitOfWork
+7. DependencyInjection.cs updated: AddMediatR with assembly scanning + ValidationBehavior as IPipelineBehavior. Old service registrations kept for transitional period
+8. DepartmentController — dual injection (IMediator for GET, IDepartmentService for POST/PUT/DELETE). Transitional approach is correct.
+9. InvalidateCache() made public static — anticipated command handlers will need cross-handler cache invalidation
+10. Folder structure: Features/Departments/Queries/GetAllDepartments/ and GetDepartmentById/
+
+Key observations:
+- Inherited GetAllDepartmentsQuery from PagedRequest instead of duplicating properties — shows good instinct for code reuse
+- ValidationBehavior uses Task.WhenAll for parallel validator execution — not just correct, it's optimal
+- Correctly understood the transitional pattern — didn't try to rip out everything at once
+- Asked insightful question about how MediatR discovers handlers (generic type matching via DI)
+- Asked about MediatR logging — correctly understood MediatR has NO built-in logging, behaviors are user-built
+
 ## Strengths Identified (Across Milestones)
 1. Learns from feedback — every issue raised has been addressed
 2. Good instinct for code organization (restructured Domain layer on own initiative)
@@ -305,6 +329,8 @@ Static _cacheResetToken is correct because IMemoryCache is singleton and CTS mus
 14. Expression tree construction — understood boxing, reflection, and lambda building on first attempt
 15. CancellationTokenSource for cache invalidation — chose the advanced pattern over simple key tracking
 16. Consistent improvement trajectory — scores: 7.5 → 8.5 → 8.5 → 9.0
+17. CQRS adoption was smooth — understood the pattern quickly, applied it correctly on first attempt
+18. Query inheriting PagedRequest shows he thinks about code reuse before writing new classes
 
 ## Weaknesses / Areas to Watch
 1. Attention to detail on first pass — misses edge cases (null-safety, hardcoded values, security leaks)
