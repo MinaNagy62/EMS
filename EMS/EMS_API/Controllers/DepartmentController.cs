@@ -19,10 +19,10 @@ public class DepartmentController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetAll()
+    public async Task<IActionResult> GetAll([FromQuery] PagedRequest request)
     {
-        var departments = await _departmentService.GetAllDepartmentsAsync();
-        return Ok(ApiResponse<IEnumerable<DepartmentResponse>>.SuccessResponse(departments));
+        var departments = await _departmentService.GetAllDepartmentsAsync(request);
+        return Ok(ApiResponse<PagedResponse<DepartmentResponse>>.SuccessResponse(departments));
     }
 
     [HttpGet("{id}")]

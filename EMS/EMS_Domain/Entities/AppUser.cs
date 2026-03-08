@@ -2,9 +2,8 @@
 
 namespace EMS_Domain.Entities;
 
-public class AppUser
+public class AppUser : BaseEntity
 {
-    public int Id { get; set; }
     public string FirstName { get; set; }
     public string LastName { get; set; }
     public string Email { get; set; }

@@ -19,10 +19,10 @@ public class EmployeeController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetAll()
+    public async Task<IActionResult> GetAll([FromQuery] PagedRequest request)
     {
-        var employees = await _employeeService.GetAllEmployeesAsync();
-        return Ok(ApiResponse<IEnumerable<EmployeeResponse>>.SuccessResponse(employees));
+        var employees = await _employeeService.GetAllEmployeesAsync(request);
+        return Ok(ApiResponse<PagedResponse<EmployeeResponse>>.SuccessResponse(employees));
     }
 
     [HttpGet("{id}")]

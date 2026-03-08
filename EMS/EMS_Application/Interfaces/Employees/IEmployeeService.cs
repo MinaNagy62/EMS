@@ -1,10 +1,11 @@
+using EMS_Application.Common;
 using EMS_Application.DTO.Employee;
 
 namespace EMS_Application.Interfaces.Employees;
 
 public interface IEmployeeService
 {
-    Task<IEnumerable<EmployeeResponse>> GetAllEmployeesAsync();
+    Task<PagedResponse<EmployeeResponse>> GetAllEmployeesAsync(PagedRequest request);
     Task<EmployeeResponse> GetEmployeeByIdAsync(int id);
     Task<EmployeeResponse> CreateEmployeeAsync(CreateEmployeeRequest request);
     Task<EmployeeResponse> UpdateEmployeeAsync(int id, UpdateEmployeeRequest request);

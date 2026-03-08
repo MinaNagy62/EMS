@@ -24,13 +24,20 @@ public class EmployeeService : IEmployeeService
         _updateValidator = updateValidator;
     }
 
-    public async Task<IEnumerable<EmployeeResponse>> GetAllEmployeesAsync()
+    public async Task<PagedResponse<EmployeeResponse>> GetAllEmployeesAsync(PagedRequest request)
     {
-        var employees = await _unitOfWork.Employees.GetAllAsync(
+        var pagedEmployees = await _unitOfWork.Employees.GetPagedAsync(
+            request,
             e => e.IsActive,
             e => e.Department);
 
-        return employees.ToResponse();
+        return new PagedResponse<EmployeeResponse>
+        {
+            Items = pagedEmployees.Items.Select(e => e.ToResponse()).ToList(),
+            PageNumber = pagedEmployees.PageNumber,
+            PageSize = pagedEmployees.PageSize,
+            TotalCount = pagedEmployees.TotalCount
+        };
     }
 
     public async Task<EmployeeResponse> GetEmployeeByIdAsync(int id)

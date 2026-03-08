@@ -24,10 +24,17 @@ public class DepartmentService : IDepartmentService
         _updateValidator = updateValidator;
     }
 
-    public async Task<IEnumerable<DepartmentResponse>> GetAllDepartmentsAsync()
+    public async Task<PagedResponse<DepartmentResponse>> GetAllDepartmentsAsync(PagedRequest request)
     {
-        var departments = await _unitOfWork.Departments.GetAllAsync(d => d.IsActive);
-        return departments.ToResponse();
+        var pagedDepartments = await _unitOfWork.Departments.GetPagedAsync(request, d => d.IsActive);
+
+        return new PagedResponse<DepartmentResponse>
+        {
+            Items = pagedDepartments.Items.Select(d => d.ToResponse()).ToList(),
+            PageNumber = pagedDepartments.PageNumber,
+            PageSize = pagedDepartments.PageSize,
+            TotalCount = pagedDepartments.TotalCount
+        };
     }
 
     public async Task<DepartmentResponse> GetDepartmentByIdAsync(int id)
