@@ -1,13 +1,15 @@
-using EMS_Application.DTO.Employee;
-using EMS_Domain.Enum;
+using EMS_Application.Features.Employees.Commands.UpdateEmployee;
 using FluentValidation;
 
 namespace EMS_Application.Validators;
 
-public class UpdateEmployeeValidator : AbstractValidator<UpdateEmployeeRequest>
+public class UpdateEmployeeValidator : AbstractValidator<UpdateEmployeeCommand>
 {
     public UpdateEmployeeValidator()
     {
+        RuleFor(x => x.Id)
+            .GreaterThan(0).WithMessage("Id must be greater than 0.");
+
         RuleFor(x => x.FirstName)
             .NotEmpty().WithMessage("First name is required.")
             .Length(2, 50).WithMessage("First name must be between 2 and 50 characters.");

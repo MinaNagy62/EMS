@@ -1,11 +1,11 @@
-using EMS_Application.DTO.Auth;
+using EMS_Application.Features.Auth.Commands.Login;
 using FluentValidation;
 
 namespace EMS_Application.Validators;
 
-public class LoginRequestValidator : AbstractValidator<LoginRequest>
+public class LoginCommandValidator : AbstractValidator<LoginCommand>
 {
-    public LoginRequestValidator()
+    public LoginCommandValidator()
     {
         RuleFor(x => x.Email)
             .NotEmpty().WithMessage("Email is required.")

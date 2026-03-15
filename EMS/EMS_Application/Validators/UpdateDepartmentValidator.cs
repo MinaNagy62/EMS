@@ -1,12 +1,15 @@
-using EMS_Application.DTO.Department;
+using EMS_Application.Features.Departments.Commands.UpdateDepartment;
 using FluentValidation;
 
 namespace EMS_Application.Validators;
 
-public class UpdateDepartmentValidator : AbstractValidator<UpdateDepartmentRequest>
+public class UpdateDepartmentValidator : AbstractValidator<UpdateDepartmentCommand>
 {
     public UpdateDepartmentValidator()
     {
+        RuleFor(x => x.Id)
+            .GreaterThan(0).WithMessage("Id must be greater than 0.");
+
         RuleFor(x => x.Name)
             .NotEmpty().WithMessage("Name is required.")
             .Length(2, 100).WithMessage("Name must be between 2 and 100 characters.");

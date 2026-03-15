@@ -1,6 +1,9 @@
 using EMS_Application.Common;
 using EMS_Application.DTO.Auth;
-using EMS_Application.Interfaces.AppUsers;
+using EMS_Application.Features.Auth.Commands.Login;
+using EMS_Application.Features.Auth.Commands.RefreshToken;
+using EMS_Application.Features.Auth.Commands.Register;
+using MediatR;
 using Microsoft.AspNetCore.Mvc;
 
 namespace EMS_API.Controllers;
@@ -9,31 +12,31 @@ namespace EMS_API.Controllers;
 [Route("api/[controller]")]
 public class AuthController : ControllerBase
 {
-    private readonly IAuthService _authService;
+    private readonly IMediator _mediator;
 
-    public AuthController(IAuthService authService)
+    public AuthController(IMediator mediator)
     {
-        _authService = authService;
+        _mediator = mediator;
     }
 
     [HttpPost("register")]
-    public async Task<IActionResult> Register([FromBody] RegisterRequest request)
+    public async Task<IActionResult> Register([FromBody] RegisterCommand command)
     {
-        var result = await _authService.RegisterAsync(request);
+        var result = await _mediator.Send(command);
         return Ok(ApiResponse<AuthResponse>.SuccessResponse(result, "User registered successfully."));
     }
 
     [HttpPost("login")]
-    public async Task<IActionResult> Login([FromBody] LoginRequest request)
+    public async Task<IActionResult> Login([FromBody] LoginCommand command)
     {
-        var result = await _authService.LoginAsync(request);
+        var result = await _mediator.Send(command);
         return Ok(ApiResponse<AuthResponse>.SuccessResponse(result, "Login successful."));
     }
 
     [HttpPost("refresh")]
-    public async Task<IActionResult> Refresh([FromBody] RefreshTokenRequest request)
+    public async Task<IActionResult> Refresh([FromBody] RefreshTokenCommand command)
     {
-        var result = await _authService.RefreshTokenAsync(request.RefreshToken);
+        var result = await _mediator.Send(command);
         return Ok(ApiResponse<AuthResponse>.SuccessResponse(result, "Token refreshed successfully."));
     }
 }

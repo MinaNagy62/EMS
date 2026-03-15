@@ -1,8 +1,10 @@
 using EMS_Application.Common;
 using EMS_Application.DTO.Department;
+using EMS_Application.Features.Departments.Commands.CreateDepartment;
+using EMS_Application.Features.Departments.Commands.DeleteDepartment;
+using EMS_Application.Features.Departments.Commands.UpdateDepartment;
 using EMS_Application.Features.Departments.Queries.GetAllDepartments;
 using EMS_Application.Features.Departments.Queries.GetDepartmentById;
-using EMS_Application.Interfaces.Departments;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -15,12 +17,10 @@ namespace EMS_API.Controllers;
 public class DepartmentController : ControllerBase
 {
     private readonly IMediator _mediator;
-    private readonly IDepartmentService _departmentService;
 
-    public DepartmentController(IMediator mediator, IDepartmentService departmentService)
+    public DepartmentController(IMediator mediator)
     {
         _mediator = mediator;
-        _departmentService = departmentService;
     }
 
     [HttpGet]
@@ -39,18 +39,19 @@ public class DepartmentController : ControllerBase
 
     [HttpPost]
     [Authorize(Roles = "Admin")]
-    public async Task<IActionResult> Create([FromBody] CreateDepartmentRequest request)
+    public async Task<IActionResult> Create([FromBody] CreateDepartmentCommand command)
     {
-        var created = await _departmentService.CreateDepartmentAsync(request);
+        var created = await _mediator.Send(command);
         return CreatedAtAction(nameof(GetById), new { id = created.Id },
             ApiResponse<DepartmentResponse>.SuccessResponse(created, "Department created successfully."));
     }
 
     [HttpPut("{id}")]
     [Authorize(Roles = "Admin")]
-    public async Task<IActionResult> Update(int id, [FromBody] UpdateDepartmentRequest request)
+    public async Task<IActionResult> Update(int id, [FromBody] UpdateDepartmentCommand command)
     {
-        var updated = await _departmentService.UpdateDepartmentAsync(id, request);
+        command.Id = id;
+        var updated = await _mediator.Send(command);
         return Ok(ApiResponse<DepartmentResponse>.SuccessResponse(updated, "Department updated successfully."));
     }
 
@@ -58,7 +59,7 @@ public class DepartmentController : ControllerBase
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Delete(int id)
     {
-        await _departmentService.DeleteDepartmentAsync(id);
+        await _mediator.Send(new DeleteDepartmentCommand { Id = id });
         return Ok(ApiResponse<object>.SuccessResponse(null!, "Department deleted successfully."));
     }
 }

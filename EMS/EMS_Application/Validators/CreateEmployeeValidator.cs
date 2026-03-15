@@ -1,10 +1,9 @@
-using EMS_Application.DTO.Employee;
-using EMS_Domain.Enum;
+using EMS_Application.Features.Employees.Commands.CreateEmployee;
 using FluentValidation;
 
 namespace EMS_Application.Validators;
 
-public class CreateEmployeeValidator : AbstractValidator<CreateEmployeeRequest>
+public class CreateEmployeeValidator : AbstractValidator<CreateEmployeeCommand>
 {
     public CreateEmployeeValidator()
     {

@@ -1,9 +1,9 @@
-using EMS_Application.DTO.Department;
+using EMS_Application.Features.Departments.Commands.CreateDepartment;
 using FluentValidation;
 
 namespace EMS_Application.Validators;
 
-public class CreateDepartmentValidator : AbstractValidator<CreateDepartmentRequest>
+public class CreateDepartmentValidator : AbstractValidator<CreateDepartmentCommand>
 {
     public CreateDepartmentValidator()
     {

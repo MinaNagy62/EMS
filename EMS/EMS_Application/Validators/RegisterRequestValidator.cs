@@ -1,11 +1,11 @@
-using EMS_Application.DTO.Auth;
+using EMS_Application.Features.Auth.Commands.Register;
 using FluentValidation;
 
 namespace EMS_Application.Validators;
 
-public class RegisterRequestValidator : AbstractValidator<RegisterRequest>
+public class RegisterCommandValidator : AbstractValidator<RegisterCommand>
 {
-    public RegisterRequestValidator()
+    public RegisterCommandValidator()
     {
         RuleFor(x => x.FirstName)
             .NotEmpty().WithMessage("First name is required.")

@@ -18,27 +18,4 @@ public static class DepartmentMapping
             UpdatedAt = department.UpdatedAt
         };
     }
-
-    public static IEnumerable<DepartmentResponse> ToResponse(this IEnumerable<Department> departments)
-    {
-        return departments.Select(d => d.ToResponse());
-    }
-
-    public static Department ToEntity(this CreateDepartmentRequest request)
-    {
-        return new Department
-        {
-            Name = request.Name,
-            Code = request.Code,
-            Description = request.Description
-        };
-    }
-
-    public static void ApplyUpdate(this Department department, UpdateDepartmentRequest request)
-    {
-        department.Name = request.Name;
-        department.Code = request.Code;
-        department.Description = request.Description;
-        department.UpdatedAt = DateTime.UtcNow;
-    }
 }
