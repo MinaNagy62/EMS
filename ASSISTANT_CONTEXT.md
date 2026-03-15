@@ -13,14 +13,14 @@ I am a .NET developer with 3 years of experience. I'm building this project to m
 
 ---
 
-## Current Project Structure (ACTUAL — M5 IN PROGRESS)
+## Current Project Structure (ACTUAL — M5 COMPLETED)
 ```
 EMS/
 ├── EMS_API/
 │   ├── Controllers/
-│   │   ├── AuthController.cs                      ← M3
-│   │   ├── DepartmentController.cs                ← [Authorize] added M3
-│   │   └── EmployeeController.cs                  ← [Authorize] added M3
+│   │   ├── AuthController.cs                      ← M3 (refactored M5: IMediator only)
+│   │   ├── DepartmentController.cs                ← M1 (refactored M5: IMediator only)
+│   │   └── EmployeeController.cs                  ← M1 (refactored M5: IMediator only)
 │   ├── Middleware/
 │   │   └── ExceptionHandlingMiddleware.cs
 │   ├── Program.cs                                 ← JWT auth config added M3
@@ -35,63 +35,89 @@ EMS/
 │   │   └── ValidationExtensions.cs                ← M3
 │   ├── DTO/
 │   │   ├── Department/
-│   │   │   ├── CreateDepartmentRequest.cs
-│   │   │   ├── DepartmentQueryRequest.cs          ← M4
-│   │   │   ├── UpdateDepartmentRequest.cs
+│   │   │   ├── DepartmentQueryRequest.cs          ← M4 (unused — replaced by GetAllDepartmentsQuery)
 │   │   │   └── DepartmentResponse.cs
 │   │   ├── Employee/
-│   │   │   ├── CreateEmployeeRequest.cs
-│   │   │   ├── EmployeeQueryRequest.cs            ← M4
-│   │   │   ├── UpdateEmployeeRequest.cs
+│   │   │   ├── EmployeeQueryRequest.cs            ← M4 (unused — replaced by GetAllEmployeesQuery)
 │   │   │   └── EmployeeResponse.cs
 │   │   └── Auth/                                  ← M3
-│   │       ├── AuthResponse.cs
-│   │       ├── LoginRequest.cs
-│   │       ├── RegisterRequest.cs
-│   │       └── RefreshTokenRequest.cs
+│   │       └── AuthResponse.cs
 │   ├── Exceptions/
 │   │   ├── BadRequestException.cs
 │   │   ├── NotFoundException.cs
 │   │   └── ValidationException.cs
 │   ├── Interfaces/
 │   │   ├── Departments/
-│   │   │   ├── IDepartmentService.cs
 │   │   │   └── IDepartmentRepository.cs
 │   │   ├── Employees/
-│   │   │   ├── IEmployeeService.cs
 │   │   │   └── IEmployeeRepository.cs
 │   │   ├── AppUsers/                              ← M3
-│   │   │   ├── IAuthService.cs
 │   │   │   ├── IJwtTokenService.cs
 │   │   │   └── IAppUserRepository.cs
 │   │   ├── IGenericRepository.cs
 │   │   └── IUnitOfWork.cs
 │   ├── Mapping/
-│   │   ├── DepartmentMapping.cs
-│   │   └── EmployeeMapping.cs
+│   │   ├── DepartmentMapping.cs                   ← ToResponse only (ToEntity/ApplyUpdate removed M5)
+│   │   └── EmployeeMapping.cs                     ← ToResponse only (cleaned M5)
 │   ├── Behaviors/                                 ← M5
-│   │   └── ValidationBehavior.cs
+│   │   ├── LoggingBehavior.cs                     ← M5 Sprint 5
+│   │   └── ValidationBehavior.cs                  ← M5 Sprint 1
 │   ├── Features/                                  ← M5
-│   │   └── Departments/
-│   │       └── Queries/
-│   │           ├── GetAllDepartments/
-│   │           │   ├── GetAllDepartmentsQuery.cs
-│   │           │   └── GetAllDepartmentsHandler.cs
-│   │           └── GetDepartmentById/
-│   │               ├── GetDepartmentByIdQuery.cs
-│   │               └── GetDepartmentByIdHandler.cs
-│   ├── Services/
-│   │   ├── DepartmentService.cs                   ← partially replaced by handlers (writes still here)
-│   │   ├── EmployeeService.cs
-│   │   └── AuthService.cs                         ← M3
+│   │   ├── Departments/
+│   │   │   ├── Queries/
+│   │   │   │   ├── GetAllDepartments/
+│   │   │   │   │   ├── GetAllDepartmentsQuery.cs
+│   │   │   │   │   └── GetAllDepartmentsHandler.cs
+│   │   │   │   └── GetDepartmentById/
+│   │   │   │       ├── GetDepartmentByIdQuery.cs
+│   │   │   │       └── GetDepartmentByIdHandler.cs
+│   │   │   └── Commands/                          ← M5 Sprint 2
+│   │   │       ├── CreateDepartment/
+│   │   │       │   ├── CreateDepartmentCommand.cs
+│   │   │       │   └── CreateDepartmentHandler.cs
+│   │   │       ├── UpdateDepartment/
+│   │   │       │   ├── UpdateDepartmentCommand.cs
+│   │   │       │   └── UpdateDepartmentHandler.cs
+│   │   │       └── DeleteDepartment/
+│   │   │           ├── DeleteDepartmentCommand.cs
+│   │   │           └── DeleteDepartmentHandler.cs
+│   │   ├── Employees/                             ← M5 Sprint 3
+│   │   │   ├── Queries/
+│   │   │   │   ├── GetAllEmployees/
+│   │   │   │   │   ├── GetAllEmployeesQuery.cs
+│   │   │   │   │   └── GetAllEmployeesHandler.cs
+│   │   │   │   └── GetEmployeeById/
+│   │   │   │       ├── GetEmployeeByIdQuery.cs
+│   │   │   │       └── GetEmployeeByIdHandler.cs
+│   │   │   └── Commands/
+│   │   │       ├── CreateEmployee/
+│   │   │       │   ├── CreateEmployeeCommand.cs
+│   │   │       │   └── CreateEmployeeHandler.cs
+│   │   │       ├── UpdateEmployee/
+│   │   │       │   ├── UpdateEmployeeCommand.cs
+│   │   │       │   └── UpdateEmployeeHandler.cs
+│   │   │       └── DeleteEmployee/
+│   │   │           ├── DeleteEmployeeCommand.cs
+│   │   │           └── DeleteEmployeeHandler.cs
+│   │   └── Auth/                                  ← M5 Sprint 4
+│   │       └── Commands/
+│   │           ├── Register/
+│   │           │   ├── RegisterCommand.cs
+│   │           │   └── RegisterHandler.cs
+│   │           ├── Login/
+│   │           │   ├── LoginCommand.cs
+│   │           │   └── LoginHandler.cs
+│   │           └── RefreshToken/
+│   │               ├── RefreshTokenCommand.cs
+│   │               └── RefreshTokenHandler.cs
 │   ├── Validators/
-│   │   ├── CreateDepartmentValidator.cs
-│   │   ├── UpdateDepartmentValidator.cs
-│   │   ├── CreateEmployeeValidator.cs
-│   │   ├── UpdateEmployeeValidator.cs
-│   │   ├── RegisterRequestValidator.cs            ← M3
-│   │   └── LoginRequestValidator.cs               ← M3
-│   ├── DependencyInjection.cs
+│   │   ├── CreateDepartmentValidator.cs           ← targets CreateDepartmentCommand (M5)
+│   │   ├── UpdateDepartmentValidator.cs           ← targets UpdateDepartmentCommand (M5)
+│   │   ├── CreateEmployeeValidator.cs             ← targets CreateEmployeeCommand (M5)
+│   │   ├── UpdateEmployeeValidator.cs             ← targets UpdateEmployeeCommand (M5)
+│   │   ├── RegisterCommandValidator.cs            ← targets RegisterCommand (M5)
+│   │   └── LoginCommandValidator.cs               ← targets LoginCommand (M5)
+│   ├── DependencyInjection.cs                     ← Zero service registrations, only MediatR + behaviors
 │   └── EMS_Application.csproj
 ├── EMS_Domain/
 │   ├── Entities/
@@ -195,8 +221,7 @@ EMS/
 | 2 | DTOs, Validation & Error Handling | COMPLETED (Score: 8.5/10) |
 | 3 | Authentication & Authorization | COMPLETED (Score: 8.5/10) |
 | 4 | Advanced Querying & Performance | COMPLETED (Score: 9/10) |
-| 5 | CQRS with MediatR | IN PROGRESS (Sprint 1 done: 9.5/10) |
-| 6 | Background Jobs, Logging & Polish | Not Started |
+| 5 | CQRS with MediatR | COMPLETED (Score: 9.5/10) |
 
 ---
 
@@ -285,7 +310,7 @@ EMS/
 
 ---
 
-## Milestone 5 — IN PROGRESS (Sprint 1: 9.5/10)
+## Milestone 5 — COMPLETED (Score: 9.5/10)
 
 ### What is CQRS?
 CQRS (Command Query Responsibility Segregation) splits reads and writes into separate models. Instead of one service class with 5+ methods, each operation becomes its own pair: a Request class (Command or Query) + a Handler class.
@@ -297,31 +322,73 @@ CQRS (Command Query Responsibility Segregation) splits reads and writes into sep
 An in-process message dispatcher. Controller calls `_mediator.Send(query)` → MediatR finds the handler that matches the request type (via generic type parameter in `IRequestHandler<TRequest, TResponse>`) → calls `Handle()` → returns result. Auto-discovers handlers via assembly scanning (`RegisterServicesFromAssembly`).
 
 ### What are Pipeline Behaviors?
-MediatR's middleware. Implements `IPipelineBehavior<TRequest, TResponse>`. Wraps every request — `next()` calls the next behavior or handler (like `_next(context)` in HTTP middleware). Used for validation, logging, caching as cross-cutting concerns.
+MediatR's middleware. Implements `IPipelineBehavior<TRequest, TResponse>`. Wraps every request — `next()` calls the next behavior or handler (like `_next(context)` in HTTP middleware). Used for validation, logging as cross-cutting concerns.
 
-### Sprint 1 delivered:
-- `ValidationBehavior<TRequest, TResponse>` — runs FluentValidation automatically before every handler
-- `GetAllDepartmentsQuery : PagedRequest, IRequest<...>` — inherits PagedRequest for reuse
-- `GetAllDepartmentsHandler` — includes caching, only injects IUnitOfWork + IMemoryCache
-- `GetDepartmentByIdQuery` / `GetDepartmentByIdHandler` — clean, minimal
-- DependencyInjection.cs: `AddMediatR(cfg => cfg.RegisterServicesFromAssembly(...))` + `AddTransient(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>))`
-- DepartmentController: dual injection — `IMediator` for reads, `IDepartmentService` for writes (transitional)
+### Pipeline flow (order matters):
+```
+Request → LoggingBehavior (logs entry + Stopwatch)
+            → ValidationBehavior (validates, throws if invalid)
+                → Handler (business logic)
+            ← ValidationBehavior
+         ← LoggingBehavior (logs exit + elapsed ms, or logs error)
+Response
+```
 
-### Remaining:
-- Sprint 2: Department Commands (Create/Update/Delete handlers, remove DepartmentService)
-- Sprint 3: Employee Queries + Commands
-- Sprint 4: Auth Commands + Notifications
-- Sprint 5: LoggingBehavior
+### What was delivered (5 sprints):
+
+**Sprint 1 — MediatR Setup + Department Queries:**
+- ValidationBehavior with Task.WhenAll for parallel validation
+- GetAllDepartmentsQuery : PagedRequest (reuse pattern) + GetAllDepartmentsHandler (with caching)
+- GetDepartmentByIdQuery/Handler
+
+**Sprint 2 — Department Commands:**
+- CreateDepartmentCommand/Handler, UpdateDepartmentCommand/Handler, DeleteDepartmentCommand/Handler
+- Cache invalidation via GetAllDepartmentsHandler.InvalidateCache()
+- DepartmentService + IDepartmentService deleted
+- Validators target Commands, not DTOs
+
+**Sprint 3 — Employee Queries + Commands:**
+- GetAllEmployeesQuery : PagedRequest (filters: Search, DepartmentId, Gender)
+- GetEmployeeByIdHandler with Department include
+- Create/Update/Delete Employee commands + handlers
+- EmployeeService + IEmployeeService deleted
+
+**Sprint 4 — Auth Refactor:**
+- RegisterCommand/Handler, LoginCommand/Handler, RefreshTokenCommand/Handler
+- All inject IUnitOfWork + IJwtTokenService + IOptions<JwtSettings>
+- AuthService + IAuthService deleted
+- DependencyInjection.cs: ZERO service registrations
+
+**Sprint 5 — LoggingBehavior:**
+- LoggingBehavior with ILogger, Stopwatch, structured logging ({RequestName}, {ElapsedMs})
+- LogInformation for normal flow, LogError for exceptions
+- Does NOT log request payload (security: passwords, tokens)
+- Registered BEFORE ValidationBehavior (wraps everything)
+
+### DependencyInjection.cs (final state):
+```csharp
+services.AddValidatorsFromAssembly(Assembly.GetExecutingAssembly());
+services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(Assembly.GetExecutingAssembly()));
+services.AddTransient(typeof(IPipelineBehavior<,>), typeof(LoggingBehavior<,>));
+services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
+```
+
+### 13 handlers total:
+| Feature | Queries | Commands |
+|---|---|---|
+| Departments | GetAll, GetById | Create, Update, Delete |
+| Employees | GetAll, GetById | Create, Update, Delete |
+| Auth | — | Register, Login, RefreshToken |
 
 ---
 
 ## Rules for All Milestones
 - NO AutoMapper — manual mapping only
 - Controllers must be thin — no try-catch (middleware handles everything)
-- Validation happens via ValidationBehavior (M5+) or in the service layer (pre-M5)
+- Validation happens via ValidationBehavior automatically (no manual validation in handlers)
 - Middleware handles ALL exceptions
 - All responses wrapped in ApiResponse<T>
-- Services/Handlers return DTOs, never entities
+- Handlers return DTOs, never entities (no service classes exist anymore)
 - All config values read from settings (no hardcoded magic numbers) — use Options pattern
 
 ---
@@ -410,7 +477,7 @@ MediatR's middleware. Implements `IPipelineBehavior<TRequest, TResponse>`. Wraps
 9. Why cache DTOs and not EF Core entities?
 10. Where should filter logic live — service or repository? Why?
 
-### After Milestone 5 (in progress):
+### After Milestone 5:
 1. What is CQRS and when would you use it?
 2. How does MediatR work? How does it find the right handler?
 3. What are Pipeline Behaviors? How are they different from HTTP middleware?
@@ -421,6 +488,10 @@ MediatR's middleware. Implements `IPipelineBehavior<TRequest, TResponse>`. Wraps
 8. Where does validation happen in a CQRS architecture?
 9. How do you handle cross-cutting concerns in CQRS?
 10. What are Commands vs Queries? What's the difference?
+11. Why is Login a Command and not a Query?
+12. Why not log the request payload in LoggingBehavior?
+13. Why register LoggingBehavior before ValidationBehavior?
+14. In PUT endpoints, why use the URL id instead of the body id?
 
 ---
 

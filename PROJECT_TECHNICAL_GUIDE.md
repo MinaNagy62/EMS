@@ -8,7 +8,7 @@ Everything you need to understand this project, top to bottom. Every file, every
 
 An **Employee Management System (EMS)** REST API. It manages **Departments**, **Employees**, and **User Authentication**. Built with .NET 10, SQL Server, Entity Framework Core, and JWT authentication. The goal is to learn and demonstrate backend patterns for interviews.
 
-**Current status:** Milestone 1 (COMPLETED), Milestone 2 (COMPLETED), Milestone 3 (COMPLETED), Milestone 4 (COMPLETED), Milestone 5 (IN PROGRESS).
+**Current status:** Milestone 1 (COMPLETED), Milestone 2 (COMPLETED), Milestone 3 (COMPLETED), Milestone 4 (COMPLETED), Milestone 5 (COMPLETED).
 
 ---
 
@@ -153,15 +153,7 @@ UnitOfWork.AppUsers     → IAppUserRepository      ← Added in M3
 UnitOfWork.SaveChangesAsync()  → commits everything
 ```
 
-**IDepartmentService** / **IEmployeeService** — define the business operations (GetAll, GetById, Create, Update, Delete). They accept DTOs and return DTOs — never entities.
-
-**IAuthService** (`Interfaces/AppUsers/IAuthService.cs`) — Added in M3:
-```csharp
-Task<AuthResponse> RegisterAsync(RegisterRequest request);
-Task<AuthResponse> LoginAsync(LoginRequest request);
-Task<AuthResponse> RefreshTokenAsync(string refreshToken);
-```
-This is NOT a CRUD service — it's an auth-specific service. Register creates a user + returns tokens. Login validates credentials + returns tokens. RefreshToken rotates an expired access token.
+**IDepartmentService** / **IEmployeeService** / **IAuthService** — **DELETED in M5.** These service interfaces were replaced by CQRS Command/Query handlers. Each operation (GetAll, Create, Update, Delete, Login, Register, etc.) is now its own handler class in `Features/`. No service layer exists anymore.
 
 **IJwtTokenService** (`Interfaces/AppUsers/IJwtTokenService.cs`) — Added in M3:
 ```csharp
@@ -221,14 +213,15 @@ There's also an `IEnumerable<T>.ToResponse()` overload for mapping lists.
 
 #### 3.2.4 Validators (`Validators/`)
 
-FluentValidation validators — one per request DTO (6 total). Rules are defined in the constructor using a fluent chain.
+FluentValidation validators — one per Command (6 total). Rules are defined in the constructor using a fluent chain. **In M5, validators were retargeted from DTOs to Command classes** — they now validate `CreateDepartmentCommand` instead of `CreateDepartmentRequest`.
 
-**Department validators** (`CreateDepartmentValidator`, `UpdateDepartmentValidator`):
+**Department validators** (`CreateDepartmentValidator : AbstractValidator<CreateDepartmentCommand>`, `UpdateDepartmentValidator : AbstractValidator<UpdateDepartmentCommand>`):
 - Name: not empty, 2-100 chars
 - Code: not empty, 2-10 chars, regex `^[A-Z0-9]+$` (uppercase letters and digits only — also handles null safely, unlike `.Must()`)
 - Description: max 500
+- Update also validates: Id > 0
 
-**Employee validators** (`CreateEmployeeValidator`, `UpdateEmployeeValidator`):
+**Employee validators** (`CreateEmployeeValidator : AbstractValidator<CreateEmployeeCommand>`, `UpdateEmployeeValidator : AbstractValidator<UpdateEmployeeCommand>`):
 - FirstName/LastName: not empty, 2-50 chars
 - Email: not empty, valid email format
 - Phone: max 20 (optional, so no NotEmpty)
@@ -238,14 +231,15 @@ FluentValidation validators — one per request DTO (6 total). Rules are defined
 - Gender: must be a defined enum value (`IsInEnum()`)
 - JobTitle: not empty, 2-100 chars
 - DepartmentId: greater than 0
+- Update also validates: Id > 0
 
-**Auth validators** (`RegisterRequestValidator`, `LoginRequestValidator`) — Added in M3:
+**Auth validators** (`RegisterCommandValidator : AbstractValidator<RegisterCommand>`, `LoginCommandValidator : AbstractValidator<LoginCommand>`) — Added in M3, retargeted in M5:
 - Register: FirstName/LastName (2-50), Email (valid format), Password (min 8 chars)
 - Login: Email (valid format), Password (required — no min length on login, just on registration)
 
 **How they're registered:** `AddValidatorsFromAssembly()` in `DependencyInjection.cs` scans the assembly and auto-registers every class that extends `AbstractValidator<T>` into DI. You never manually register each validator.
 
-**Where validation happens:** In the **service layer** (not controllers, not middleware). Services inject `IValidator<T>`, call `.ValidateAsync()`, and throw `ValidationException` if invalid. This is important for interviews — validation in the service layer means validation runs even if someone calls the service from a background job or another service, not just from an HTTP controller.
+**Where validation happens:** In the **ValidationBehavior pipeline** (M5). Before M5, services manually injected `IValidator<T>`. Now, `ValidationBehavior` automatically intercepts every MediatR request, finds matching validators via `IEnumerable<IValidator<TRequest>>`, and throws `ValidationException` if invalid — before the handler ever runs. This is important for interviews — validation happens at the pipeline level, meaning it runs regardless of which handler processes the request.
 
 #### 3.2.5 Custom Exceptions (`Exceptions/`)
 
@@ -360,27 +354,21 @@ This is a **POCO class** that maps 1:1 to the `JwtSettings` section in `appsetti
 
 **Why Options pattern instead of IConfiguration?** Strongly-typed settings give you compile-time safety (no typos in string keys like `configuration["JwtSettings:SecretKey"]`), IntelliSense support, and are easier to mock in unit tests.
 
-#### 3.2.7 Services (`Services/`)
+#### 3.2.7 Services — DELETED IN M5
 
-**DepartmentService** and **EmployeeService** — the business logic layer. They:
-1. Validate the incoming DTO using injected `IValidator<T>`
-2. If validation fails, convert errors with `ToErrorDictionary()` and throw `ValidationException`
-3. Use UnitOfWork to access repositories
-4. Map between DTOs and entities
-5. Throw `NotFoundException` on missing data
-6. Return response DTOs
+**DepartmentService**, **EmployeeService**, and **AuthService** were all deleted in Milestone 5. Their logic was migrated to individual CQRS Command/Query handlers in `Features/`. The service interfaces (`IDepartmentService`, `IEmployeeService`, `IAuthService`) were also deleted.
 
-**Key patterns in services:**
-- **Validation first:** Every Create/Update method validates before doing anything else
-- **Soft delete:** `Delete` doesn't remove from DB — it sets `IsActive = false` and `UpdatedAt = DateTime.UtcNow`
-- **All queries filter by `IsActive`:** `GetAll` uses `.GetPagedAsync(request, filters)` with IsActive in the filter list
-- **GetById throws NotFoundException:** Services never return null for "not found" — they throw. The middleware turns it into a 404.
-- **Employee queries include Department:** Because `EmployeeResponse` needs `DepartmentName`, the service passes `e => e.Department` as an include expression to avoid lazy loading issues
-- **CreatedAt/UpdatedAt set in service:** `DateTime.UtcNow` is set before saving
-- **Dynamic filter building (M4):** `GetAllDepartmentsAsync` and `GetAllEmployeesAsync` build a `List<Expression<Func<T, bool>>>` from the query DTO. Each non-null filter property adds a Where expression. All filters are AND'd together in SQL.
-- **Caching (M4 — DepartmentService only):** `IMemoryCache` injected. Cache-aside pattern: check cache → miss? → query DB → store in cache → return. Cache key built from all query params. `CancellationTokenSource` with `CancellationChangeToken` links all entries so one `Cancel()` evicts everything. `InvalidateCache()` called on Create/Update/Delete. Sliding expiration 10 min + absolute 1 hour.
+All patterns that existed in services are now in handlers:
+- **Validation:** Handled automatically by ValidationBehavior pipeline (no manual validation in handlers)
+- **Soft delete:** Handlers set `IsActive = false` and `UpdatedAt = DateTime.UtcNow`
+- **All queries filter by IsActive:** Handlers build filter lists with `e => e.IsActive` as the first filter
+- **NotFoundException:** Handlers throw on missing data, middleware converts to 404
+- **Employee queries include Department:** Handlers pass `e => e.Department` as include expression
+- **CreatedAt/UpdatedAt:** Set in handlers before saving
+- **Dynamic filter building:** Handlers build `List<Expression<Func<T, bool>>>` from query properties
+- **Caching:** GetAllDepartmentsHandler has full cache logic. Command handlers call `GetAllDepartmentsHandler.InvalidateCache()` after writes.
 
-**AuthService** (`Services/AuthService.cs`) — Added in M3. The authentication service with 3 methods:
+**Auth flows (now in handlers):**
 
 **RegisterAsync flow:**
 ```
@@ -437,7 +425,20 @@ At startup, `RegisterServicesFromAssembly` scans for all `IRequestHandler<T,R>` 
 
 ##### Behaviors (`Behaviors/`)
 
-**ValidationBehavior\<TRequest, TResponse\>** — MediatR's equivalent of HTTP middleware. Implements `IPipelineBehavior<TRequest, TResponse>`.
+**LoggingBehavior\<TRequest, TResponse\>** — Added in M5 Sprint 5. Wraps every request with entry/exit logging and timing.
+
+How it works:
+1. Logs `"Handling {RequestName}"` with `LogInformation`
+2. Starts a `Stopwatch`
+3. Calls `next()` to continue the pipeline
+4. On success: logs `"Handled {RequestName} in {ElapsedMs}ms"` with `LogInformation`
+5. On exception: logs `"Failed {RequestName} in {ElapsedMs}ms — {ErrorMessage}"` with `LogError`, then re-throws with `throw;` (preserves stack trace)
+
+Uses **structured logging** with named placeholders (`{RequestName}`, `{ElapsedMs}`) — log aggregation tools (Seq, Elastic, Application Insights) can filter/group by these fields.
+
+**Security: Does NOT log the request payload.** Commands like `LoginCommand` contain passwords — logging them would expose credentials in logs.
+
+**ValidationBehavior\<TRequest, TResponse\>** — Added in M5 Sprint 1. Automatic validation pipeline.
 
 How it works:
 1. MediatR calls the behavior **before** every handler
@@ -446,68 +447,127 @@ How it works:
 4. If validation fails, throws `ValidationException` **before** the handler runs
 5. `next()` calls the next behavior or the handler — like `await _next(context)` in HTTP middleware
 
+Uses `Task.WhenAll` to run multiple validators in parallel. Error dictionary built with GroupBy/ToDictionary — same format as before, so the exception middleware still returns field-level errors.
+
+**Pipeline flow (registration order matters):**
 ```
 Request arrives
-  → ValidationBehavior (validates, throws if invalid)
-    → Handler (does the actual work)
-  ← ValidationBehavior
+  → LoggingBehavior (logs entry, starts timer)
+    → ValidationBehavior (validates, throws if invalid)
+      → Handler (does the actual work)
+    ← ValidationBehavior
+  ← LoggingBehavior (logs exit with elapsed time, or logs error)
 Response returned
 ```
 
-This replaces the manual validation code that was duplicated in every service method:
-```csharp
-// BEFORE (in every service method):
-var result = await _validator.ValidateAsync(request);
-if (!result.IsValid)
-    throw new ValidationException(result.ToErrorDictionary());
+LoggingBehavior is registered BEFORE ValidationBehavior in DI — this means validation failures are caught by LoggingBehavior's catch block and logged with timing. If reversed, validation failures would escape without being logged.
 
-// AFTER: ValidationBehavior does this automatically. Handlers never touch validation.
-```
-
-Uses `Task.WhenAll` to run multiple validators in parallel. Error dictionary built with GroupBy/ToDictionary — same format as before, so the exception middleware still returns field-level errors.
-
-##### Features (`Features/Departments/Queries/`)
+##### Features (`Features/`)
 
 Each feature is organized by domain → operation type → specific operation:
 ```
-Features/Departments/Queries/GetAllDepartments/
-├── GetAllDepartmentsQuery.cs     ← IRequest<PagedResponse<DepartmentResponse>>
-└── GetAllDepartmentsHandler.cs   ← IRequestHandler<...>
+Features/
+├── Departments/
+│   ├── Queries/
+│   │   ├── GetAllDepartments/
+│   │   │   ├── GetAllDepartmentsQuery.cs
+│   │   │   └── GetAllDepartmentsHandler.cs
+│   │   └── GetDepartmentById/
+│   │       ├── GetDepartmentByIdQuery.cs
+│   │       └── GetDepartmentByIdHandler.cs
+│   └── Commands/
+│       ├── CreateDepartment/
+│       │   ├── CreateDepartmentCommand.cs
+│       │   └── CreateDepartmentHandler.cs
+│       ├── UpdateDepartment/
+│       │   ├── UpdateDepartmentCommand.cs
+│       │   └── UpdateDepartmentHandler.cs
+│       └── DeleteDepartment/
+│           ├── DeleteDepartmentCommand.cs
+│           └── DeleteDepartmentHandler.cs
+├── Employees/
+│   ├── Queries/
+│   │   ├── GetAllEmployees/ (Query + Handler)
+│   │   └── GetEmployeeById/ (Query + Handler)
+│   └── Commands/
+│       ├── CreateEmployee/ (Command + Handler)
+│       ├── UpdateEmployee/ (Command + Handler)
+│       └── DeleteEmployee/ (Command + Handler)
+└── Auth/
+    └── Commands/
+        ├── Register/ (Command + Handler)
+        ├── Login/ (Command + Handler)
+        └── RefreshToken/ (Command + Handler)
 ```
 
-**GetAllDepartmentsQuery** — Inherits from `PagedRequest` (reuses PageNumber, PageSize, SortBy, SortDescending) and implements `IRequest<PagedResponse<DepartmentResponse>>`. Adds `Search` and `IsActive` as department-specific filters. The controller binds it directly from `[FromQuery]`.
+**13 handlers total** — 4 queries, 9 commands.
 
-**GetAllDepartmentsHandler** — Only injects `IUnitOfWork` + `IMemoryCache` (not validators — the ValidationBehavior handles that). Contains the same caching logic that was in DepartmentService. `InvalidateCache()` is `public static` so command handlers can call it when departments change.
+**Department Queries:**
+- `GetAllDepartmentsQuery : PagedRequest, IRequest<PagedResponse<DepartmentResponse>>` — Inherits PagedRequest (reuses PageNumber, PageSize, SortBy, SortDescending). Adds `Search` and `IsActive` filters. Controller binds directly from `[FromQuery]`.
+- `GetAllDepartmentsHandler` — Injects IUnitOfWork + IMemoryCache. Full caching logic. `InvalidateCache()` is `public static` so command handlers call it after writes.
+- `GetDepartmentByIdQuery` / `GetDepartmentByIdHandler` — Just `int Id`. Only injects IUnitOfWork.
 
-**GetDepartmentByIdQuery** — Just `int Id`. Implements `IRequest<DepartmentResponse>`.
+**Department Commands:**
+- `CreateDepartmentCommand` — Properties directly on command (Name, Code, Description), NOT an embedded DTO. Handler creates entity, saves, invalidates cache, returns response.
+- `UpdateDepartmentCommand` — Includes `Id` property. Handler finds existing entity, updates, invalidates cache. Controller sets `command.Id = id` from URL route (single source of truth).
+- `DeleteDepartmentCommand : IRequest` (void) — Soft delete. Handler sets `IsActive = false`, invalidates cache.
 
-**GetDepartmentByIdHandler** — Only injects `IUnitOfWork`. FindAsync + NotFoundException if null. Minimal.
+**Employee Queries:**
+- `GetAllEmployeesQuery : PagedRequest` — Filters: Search (FirstName/LastName/Email), DepartmentId, Gender. Handler builds dynamic filter list, includes Department navigation.
+- `GetEmployeeByIdHandler` — Includes Department for DepartmentName in response.
 
-##### CQRS in the Controller
+**Employee Commands:**
+- Same pattern as departments but with 10 properties (FirstName, LastName, Email, Phone, DateOfBirth, HireDate, Salary, Gender, JobTitle, DepartmentId). No caching (per M4 design decision).
 
-```
-// BEFORE: Controller injects IDepartmentService
-// AFTER:  Controller injects IMediator (+ IDepartmentService temporarily for writes)
+**Auth Commands (all Commands — even Login, because it changes state):**
+- `RegisterCommand/Handler` — BCrypt hashing, email uniqueness check, JWT generation via IJwtTokenService, returns AuthResponse with tokens.
+- `LoginCommand/Handler` — User enumeration prevention (same error for both wrong email and wrong password), token rotation.
+- `RefreshTokenCommand/Handler` — Validates refresh token and expiry, rotates tokens.
+- All three inject: IUnitOfWork + IJwtTokenService + IOptions\<JwtSettings\>
 
-[HttpGet]
-public async Task<IActionResult> GetAll([FromQuery] GetAllDepartmentsQuery query)
+##### CQRS in the Controllers
+
+All three controllers now inject only `IMediator`:
+```csharp
+// Every controller looks like this:
+public class DepartmentController : ControllerBase
 {
-    var result = await _mediator.Send(query);  // MediatR finds GetAllDepartmentsHandler
-    return Ok(ApiResponse<...>.SuccessResponse(result));
+    private readonly IMediator _mediator;
+    public DepartmentController(IMediator mediator) { _mediator = mediator; }
+
+    [HttpGet]
+    public async Task<IActionResult> GetAll([FromQuery] GetAllDepartmentsQuery query)
+    {
+        var result = await _mediator.Send(query);
+        return Ok(ApiResponse<...>.SuccessResponse(result));
+    }
+
+    [HttpPost]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> Create([FromBody] CreateDepartmentCommand command)
+    {
+        var created = await _mediator.Send(command);
+        return CreatedAtAction(nameof(GetById), new { id = created.Id }, ...);
+    }
 }
 ```
 
-The controller never knows which handler runs. It just sends the request and wraps the response. Adding a new endpoint = one new `_mediator.Send()` + a new Query/Handler pair in a new folder.
+The controller never knows which handler runs. It just sends the request and wraps the response. Adding a new endpoint = one new `_mediator.Send()` + a new Command/Query + Handler pair in a new folder.
 
 #### 3.2.9 DependencyInjection (`DependencyInjection.cs`)
 
-Extension method `AddApplication()` that registers:
-- `IDepartmentService` → `DepartmentService` (Scoped) — transitional, being replaced by handlers in M5
-- `IEmployeeService` → `EmployeeService` (Scoped)
-- `IAuthService` → `AuthService` (Scoped) — Added in M3
-- All FluentValidation validators from the assembly (auto-scan)
-- MediatR with assembly scanning — `AddMediatR(cfg => cfg.RegisterServicesFromAssembly(...))` (Added in M5)
-- `ValidationBehavior<,>` as `IPipelineBehavior<,>` (Transient) — Added in M5
+Extension method `AddApplication()` — **zero service registrations** after M5. Only registers infrastructure:
+```csharp
+services.AddValidatorsFromAssembly(Assembly.GetExecutingAssembly());  // FluentValidation auto-scan
+services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(Assembly.GetExecutingAssembly()));  // All 13 handlers
+services.AddTransient(typeof(IPipelineBehavior<,>), typeof(LoggingBehavior<,>));   // Logs every request
+services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>)); // Validates every request
+```
+
+- **Validators** auto-discovered by FluentValidation — any `AbstractValidator<T>` in the assembly
+- **Handlers** auto-discovered by MediatR — any `IRequestHandler<T,R>` in the assembly
+- **Behaviors** registered manually as open generics — order of registration = order of execution (Logging wraps Validation)
+- No `IDepartmentService`, `IEmployeeService`, or `IAuthService` — all deleted in M5
 
 Called in `Program.cs` as `builder.Services.AddApplication()`.
 
@@ -982,7 +1042,8 @@ The refresh endpoint takes a `RefreshTokenRequest` DTO (just `{ "refreshToken": 
 | **Inheritance Constraint** | BaseEntity + `where T : BaseEntity` | Guarantees Id exists on all entities for deterministic sorting (M4) |
 | **CQRS** | Features/Commands + Queries | Separates reads from writes — each operation in its own handler (M5) |
 | **Mediator Pattern** | MediatR + IMediator | Decouples sender (controller) from handler — controller doesn't know which class handles the request (M5) |
-| **Pipeline Behavior** | ValidationBehavior | MediatR middleware — wraps every request for cross-cutting concerns (M5) |
+| **Pipeline Behavior** | ValidationBehavior, LoggingBehavior | MediatR middleware — wraps every request for cross-cutting concerns (M5) |
+| **Structured Logging** | LoggingBehavior with ILogger | Named placeholders ({RequestName}, {ElapsedMs}) for log aggregation tools (M5) |
 
 ---
 
@@ -1005,7 +1066,7 @@ EMS/
 │
 ├── EMS_Application/                     ← BUSINESS LOGIC (depends on Domain)
 │   ├── EMS_Application.csproj
-│   ├── DependencyInjection.cs
+│   ├── DependencyInjection.cs           ← Zero service registrations (M5)
 │   ├── Common/
 │   │   ├── ApiResponse.cs
 │   │   ├── JwtSettings.cs              ← M3
@@ -1014,19 +1075,10 @@ EMS/
 │   │   └── ValidationExtensions.cs     ← M3
 │   ├── DTO/
 │   │   ├── Department/
-│   │   │   ├── CreateDepartmentRequest.cs
-│   │   │   ├── DepartmentQueryRequest.cs  ← M4
-│   │   │   ├── UpdateDepartmentRequest.cs
 │   │   │   └── DepartmentResponse.cs
 │   │   ├── Employee/
-│   │   │   ├── CreateEmployeeRequest.cs
-│   │   │   ├── EmployeeQueryRequest.cs    ← M4
-│   │   │   ├── UpdateEmployeeRequest.cs
 │   │   │   └── EmployeeResponse.cs
 │   │   └── Auth/                       ← M3
-│   │       ├── RegisterRequest.cs
-│   │       ├── LoginRequest.cs
-│   │       ├── RefreshTokenRequest.cs
 │   │       └── AuthResponse.cs
 │   ├── Exceptions/
 │   │   ├── NotFoundException.cs
@@ -1036,40 +1088,47 @@ EMS/
 │   │   ├── IGenericRepository.cs
 │   │   ├── IUnitOfWork.cs
 │   │   ├── Departments/
-│   │   │   ├── IDepartmentRepository.cs
-│   │   │   └── IDepartmentService.cs
+│   │   │   └── IDepartmentRepository.cs
 │   │   ├── Employees/
-│   │   │   ├── IEmployeeRepository.cs
-│   │   │   └── IEmployeeService.cs
+│   │   │   └── IEmployeeRepository.cs
 │   │   └── AppUsers/                   ← M3
 │   │       ├── IAppUserRepository.cs
-│   │       ├── IAuthService.cs
 │   │       └── IJwtTokenService.cs
 │   ├── Mapping/
-│   │   ├── DepartmentMapping.cs
-│   │   └── EmployeeMapping.cs
+│   │   ├── DepartmentMapping.cs        ← ToResponse only (M5)
+│   │   └── EmployeeMapping.cs          ← ToResponse only (M5)
 │   ├── Behaviors/                      ← M5
-│   │   └── ValidationBehavior.cs
-│   ├── Features/                       ← M5
-│   │   └── Departments/
-│   │       └── Queries/
-│   │           ├── GetAllDepartments/
-│   │           │   ├── GetAllDepartmentsQuery.cs
-│   │           │   └── GetAllDepartmentsHandler.cs
-│   │           └── GetDepartmentById/
-│   │               ├── GetDepartmentByIdQuery.cs
-│   │               └── GetDepartmentByIdHandler.cs
-│   ├── Services/
-│   │   ├── DepartmentService.cs        ← partially replaced by handlers (M5)
-│   │   ├── EmployeeService.cs
-│   │   └── AuthService.cs             ← M3
+│   │   ├── LoggingBehavior.cs          ← M5 Sprint 5
+│   │   └── ValidationBehavior.cs       ← M5 Sprint 1
+│   ├── Features/                       ← M5 (13 handlers)
+│   │   ├── Departments/
+│   │   │   ├── Queries/
+│   │   │   │   ├── GetAllDepartments/  (Query + Handler)
+│   │   │   │   └── GetDepartmentById/  (Query + Handler)
+│   │   │   └── Commands/              ← M5 Sprint 2
+│   │   │       ├── CreateDepartment/   (Command + Handler)
+│   │   │       ├── UpdateDepartment/   (Command + Handler)
+│   │   │       └── DeleteDepartment/   (Command + Handler)
+│   │   ├── Employees/                 ← M5 Sprint 3
+│   │   │   ├── Queries/
+│   │   │   │   ├── GetAllEmployees/    (Query + Handler)
+│   │   │   │   └── GetEmployeeById/    (Query + Handler)
+│   │   │   └── Commands/
+│   │   │       ├── CreateEmployee/     (Command + Handler)
+│   │   │       ├── UpdateEmployee/     (Command + Handler)
+│   │   │       └── DeleteEmployee/     (Command + Handler)
+│   │   └── Auth/                      ← M5 Sprint 4
+│   │       └── Commands/
+│   │           ├── Register/           (Command + Handler)
+│   │           ├── Login/              (Command + Handler)
+│   │           └── RefreshToken/       (Command + Handler)
 │   └── Validators/
-│       ├── CreateDepartmentValidator.cs
-│       ├── UpdateDepartmentValidator.cs
-│       ├── CreateEmployeeValidator.cs
-│       ├── UpdateEmployeeValidator.cs
-│       ├── RegisterRequestValidator.cs  ← M3
-│       └── LoginRequestValidator.cs     ← M3
+│       ├── CreateDepartmentValidator.cs   ← targets CreateDepartmentCommand (M5)
+│       ├── UpdateDepartmentValidator.cs   ← targets UpdateDepartmentCommand (M5)
+│       ├── CreateEmployeeValidator.cs     ← targets CreateEmployeeCommand (M5)
+│       ├── UpdateEmployeeValidator.cs     ← targets UpdateEmployeeCommand (M5)
+│       ├── RegisterCommandValidator.cs    ← targets RegisterCommand (M5)
+│       └── LoginCommandValidator.cs       ← targets LoginCommand (M5)
 │
 ├── EMS_Infrastructure/                  ← DATA ACCESS + EXTERNAL SERVICES (depends on Application)
 │   ├── EMS_Infrastructure.csproj
@@ -1160,21 +1219,17 @@ EMS/
 - **Milestone 3:** Authentication & Authorization (Score: 8.5/10) ✓
 - **Milestone 4:** Advanced Querying & Performance (Score: 9/10) ✓
 
-### Milestone 5: CQRS with MediatR (IN PROGRESS — Sprint 1 done)
+### Milestone 5: CQRS with MediatR — COMPLETED ✓ (Score: 9.5/10)
 - ✅ MediatR 14.1.0 installed + registered with assembly scanning
 - ✅ ValidationBehavior — automatic validation pipeline
-- ✅ Department Queries refactored to handlers (GetAll, GetById)
-- ⬜ Department Commands (Create, Update, Delete → handlers, remove DepartmentService)
-- ⬜ Employee Queries + Commands (full refactor)
-- ⬜ Auth Commands (Register, Login, Refresh)
-- ⬜ LoggingBehavior
-- ⬜ Notifications / Domain Events (cache invalidation via INotification)
+- ✅ LoggingBehavior — structured logging with Stopwatch timing
+- ✅ Department Queries refactored (GetAll with caching, GetById)
+- ✅ Department Commands (Create, Update, Delete) — DepartmentService deleted
+- ✅ Employee Queries + Commands (full refactor) — EmployeeService deleted
+- ✅ Auth Commands (Register, Login, RefreshToken) — AuthService deleted
+- ✅ All validators retargeted from DTOs to Commands
+- ✅ All controllers use only IMediator
+- ✅ DependencyInjection.cs: zero service registrations
 
-### Milestone 6: Background Jobs, Logging & Polish (NOT STARTED)
-- Serilog structured logging
-- Correlation ID middleware
-- Background jobs (Hosted Service)
-- API Versioning
-- Rate Limiting
-- Health Checks
-- Unit Tests (xUnit + Moq)
+### Project Complete ✓
+All 5 milestones delivered. No Milestone 6.

@@ -31,7 +31,7 @@
 | Unit Testing & Integration Testing | Not Started | - |
 | API Versioning | Not Started | - |
 | Rate Limiting | Not Started | - |
-| CQRS with MediatR | In Progress M5 | MediatR 14.1.0 installed, ValidationBehavior, Department queries refactored to handlers |
+| CQRS with MediatR | Done M5 | Full CQRS refactor: 13 handlers (Dept queries/commands, Emp queries/commands, Auth commands), ValidationBehavior, LoggingBehavior. Zero service classes remain. |
 | Specification Pattern | Not Started | - |
 | Dependency Injection (advanced) | Not Started | - |
 
@@ -312,6 +312,76 @@ Key observations:
 - Asked insightful question about how MediatR discovers handlers (generic type matching via DI)
 - Asked about MediatR logging — correctly understood MediatR has NO built-in logging, behaviors are user-built
 
+#### M5 Review #2 — Department Commands (Sprint 2)
+**Score: 9/10**
+
+What was completed:
+1. CreateDepartmentCommand/Handler — properties directly on command (not embedded DTO), IUnitOfWork only
+2. UpdateDepartmentCommand/Handler — NotFoundException check, cache invalidation
+3. DeleteDepartmentCommand : IRequest (void) — correct use of MediatR void pattern, soft delete
+4. Validators updated to target Commands (CreateDepartmentValidator, UpdateDepartmentValidator)
+5. DepartmentController uses only IMediator — IDepartmentService removed entirely
+6. DepartmentService.cs and IDepartmentService.cs deleted
+7. DI registration cleaned up
+8. CreatedAtAction on POST with location header
+9. command.Id = id pattern for PUT (URL as single source of truth)
+
+Issues found (1 minor):
+- Dead mapping methods (ToEntity, ApplyUpdate) left in DepartmentMapping.cs — FIXED after review
+
+Interview answer (URL vs body ID): Correct — URL identifies resource, body describes change. Controller overwrites command.Id to prevent conflict.
+
+#### M5 Review #3 — Employee Queries + Commands (Sprint 3)
+**Score: 9.5/10**
+
+What was completed:
+1. GetAllEmployeesQuery : PagedRequest, IRequest — same reuse pattern as departments
+2. GetAllEmployeesHandler — dynamic filter list (Search, DepartmentId, Gender), includes Department navigation
+3. GetEmployeeByIdHandler — includes Department for DepartmentName in response
+4. CreateEmployeeCommand with all 10 properties, CreateEmployeeHandler
+5. UpdateEmployeeCommand/Handler with NotFoundException check
+6. DeleteEmployeeCommand : IRequest (void) — soft delete, no cache
+7. Validators target Commands with comprehensive rules (10 rules on Create)
+8. Controller uses only IMediator, authorization granularity (Admin,HR for Create/Update, Admin for Delete)
+9. EmployeeService + IEmployeeService deleted, DI cleaned
+10. EmployeeMapping cleaned — only ToResponse remains
+
+No caching on employees — correct per M4 design decision.
+
+Interview answer (list of filters vs single && expression): Correct — independent, conditional, clean code. Added technical reason: each Where() = AND in SQL, same performance.
+
+#### M5 Review #4 — Auth Refactor (Sprint 4)
+**Score: 9.5/10**
+
+What was completed:
+1. RegisterCommand/Handler — BCrypt hashing, email uniqueness check, JWT generation via IJwtTokenService
+2. LoginCommand/Handler — user enumeration prevention (same error for both cases), token rotation
+3. RefreshTokenCommand/Handler — BONUS (not assigned, but correctly included from old AuthService)
+4. All 3 handlers inject IUnitOfWork + IJwtTokenService + IOptions<JwtSettings>
+5. Validators renamed: RegisterCommandValidator, LoginCommandValidator — target Commands
+6. AuthController uses only IMediator — 3 POST endpoints
+7. AuthService + IAuthService deleted
+8. DependencyInjection.cs has ZERO service registrations — only MediatR, FluentValidation, ValidationBehavior
+
+RefreshTokenHandler validates expiry date and rotates tokens on every refresh.
+
+Interview answer (Login as Command): "Because it changes state. That's the only rule that matters." — Perfect. Concise, correct, confident.
+
+#### M5 Review #5 — LoggingBehavior (Sprint 5)
+**Score: 9.5/10**
+
+What was completed:
+1. LoggingBehavior<TRequest, TResponse> — IPipelineBehavior with ILogger
+2. Logs request type name on entry (LogInformation)
+3. Stopwatch for execution timing
+4. Logs success with elapsed milliseconds (LogInformation)
+5. Logs failure with exception message (LogError) — re-throws with `throw;` (preserves stack trace)
+6. Structured logging with named placeholders ({RequestName}, {ElapsedMs}) — log aggregation friendly
+7. Does NOT log request payload — prevents sensitive data (passwords, tokens) in logs
+8. Registered BEFORE ValidationBehavior in DI — wraps everything, catches validation failures too
+
+**Milestone 5 Final Score: 9.5/10**
+
 ## Strengths Identified (Across Milestones)
 1. Learns from feedback — every issue raised has been addressed
 2. Good instinct for code organization (restructured Domain layer on own initiative)
@@ -328,9 +398,14 @@ Key observations:
 13. BaseEntity extraction for generic constraint — independently solved the deterministic ordering problem with the right architectural approach
 14. Expression tree construction — understood boxing, reflection, and lambda building on first attempt
 15. CancellationTokenSource for cache invalidation — chose the advanced pattern over simple key tracking
-16. Consistent improvement trajectory — scores: 7.5 → 8.5 → 8.5 → 9.0
+16. Consistent improvement trajectory — scores: 7.5 → 8.5 → 8.5 → 9.0 → 9.5
 17. CQRS adoption was smooth — understood the pattern quickly, applied it correctly on first attempt
 18. Query inheriting PagedRequest shows he thinks about code reuse before writing new classes
+19. Initiative — built RefreshTokenCommand without being asked (Sprint 4), recognized it belonged in the refactor
+20. Security awareness improved — no sensitive data in LoggingBehavior logs, user enumeration prevention preserved in LoginHandler
+21. Clean delete patterns — removed all dead code (services, interfaces, mapping methods) after each sprint
+22. Correct pipeline behavior ordering — LoggingBehavior before ValidationBehavior without being told why
+23. Structured logging with named placeholders — understands log aggregation tools need parseable formats
 
 ## Weaknesses / Areas to Watch
 1. Attention to detail on first pass — misses edge cases (null-safety, hardcoded values, security leaks)

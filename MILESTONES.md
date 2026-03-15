@@ -212,76 +212,123 @@ Small in scope, but deep in patterns and best practices.
 
 ---
 
-## Milestone 5: CQRS with MediatR — IN PROGRESS
-**Challenge:** Separate reads from writes using CQRS + MediatR.
+## Milestone 5: CQRS with MediatR — COMPLETED ✓
+**Score: 9.5/10**
 
-### Sprint 1 — MediatR Setup + Department Queries: COMPLETED ✓ (Score: 9.5/10)
+### What was achieved:
+Complete refactoring from service-based architecture to CQRS with MediatR. **Zero service classes remain.** All 13 operations across 3 features are now individual Command/Query + Handler pairs. Two pipeline behaviors (Logging + Validation) handle cross-cutting concerns automatically.
 
-**What CQRS is:**
-CQRS (Command Query Responsibility Segregation) splits reads and writes into separate models. Instead of one service class handling everything (GetAll, GetById, Create, Update, Delete), each operation becomes its own pair: a Request class (Command or Query) and a Handler class. Commands change state (writes), Queries read state (reads). This follows Single Responsibility Principle — each handler does exactly one thing with only the dependencies it needs.
+### The transformation:
+| Before M5 | After M5 |
+|---|---|
+| 3 service classes (Department, Employee, Auth) | 0 service classes |
+| Controllers inject services | Controllers inject only IMediator |
+| 3 manual DI registrations | 0 — MediatR auto-discovers all handlers |
+| Manual validation in every method | ValidationBehavior does it automatically |
+| No request logging | LoggingBehavior logs every request with timing |
 
-**What MediatR is:**
-MediatR is an in-process message dispatcher. The controller doesn't call services directly — it sends a request object via `_mediator.Send(query)`. MediatR scans the DI container for the handler that matches the request type (via `IRequestHandler<TRequest, TResponse>`) and calls it. Registration is automatic via assembly scanning, similar to how FluentValidation auto-discovers validators.
-
-**What Pipeline Behaviors are:**
-Pipeline Behaviors are MediatR's equivalent of HTTP middleware. They implement `IPipelineBehavior<TRequest, TResponse>` and wrap every request. `next()` calls the next behavior or the handler — like `await _next(context)` in middleware. Used for cross-cutting concerns (validation, logging) so handlers stay focused on business logic only.
-
-**Delivered:**
+### Sprint 1 — MediatR Setup + Department Queries (Score: 9.5/10)
 - [x] MediatR 14.1.0 installed in EMS_Application
-- [x] `ValidationBehavior<TRequest, TResponse>` — automatic validation pipeline (replaces manual validation in handlers)
-  - Injects `IEnumerable<IValidator<TRequest>>` — skips if no validator exists for the request type
-  - Uses `Task.WhenAll` for parallel validator execution
-  - Throws custom `ValidationException` with error dictionary (same format as before)
-- [x] `GetAllDepartmentsQuery : PagedRequest, IRequest<PagedResponse<DepartmentResponse>>` — inherits PagedRequest for reuse
+- [x] `ValidationBehavior<TRequest, TResponse>` — automatic validation pipeline with Task.WhenAll
+- [x] `GetAllDepartmentsQuery : PagedRequest, IRequest<...>` — inherits PagedRequest for reuse
 - [x] `GetAllDepartmentsHandler` — full caching logic, only injects IUnitOfWork + IMemoryCache
-- [x] `GetDepartmentByIdQuery : IRequest<DepartmentResponse>` — just `int Id`
-- [x] `GetDepartmentByIdHandler` — only injects IUnitOfWork
-- [x] DependencyInjection.cs: AddMediatR + ValidationBehavior registered as IPipelineBehavior
-- [x] DepartmentController: dual injection (IMediator for reads, IDepartmentService for writes — transitional)
-- [x] Folder structure: `Features/Departments/Queries/GetAllDepartments/` and `GetDepartmentById/`
+- [x] `GetDepartmentByIdQuery` / `GetDepartmentByIdHandler`
+- [x] DepartmentController: dual injection (transitional)
 
-**How MediatR discovers handlers (the matching mechanism):**
-At startup, `RegisterServicesFromAssembly` scans for all `IRequestHandler<T,R>` implementations and registers them in DI. At runtime, when you call `_mediator.Send(query)`, MediatR looks at the type of the object (e.g., `GetAllDepartmentsQuery`), resolves `IRequestHandler<GetAllDepartmentsQuery, PagedResponse<DepartmentResponse>>` from DI, and calls its `Handle` method. The generic type parameter IS the key.
+### Sprint 2 — Department Commands (Score: 9/10)
+- [x] `CreateDepartmentCommand/Handler` — properties on command (not embedded DTO)
+- [x] `UpdateDepartmentCommand/Handler` — NotFoundException check, cache invalidation
+- [x] `DeleteDepartmentCommand : IRequest` (void) — soft delete
+- [x] Validators updated to target Commands
+- [x] DepartmentController uses only IMediator
+- [x] DepartmentService + IDepartmentService deleted
+- [x] Dead mapping methods (ToEntity, ApplyUpdate) removed
 
-### Remaining Sprints:
-- [ ] Sprint 2: Department Commands (Create, Update, Delete → handlers, remove DepartmentService)
-- [ ] Sprint 3: Employee Queries + Commands (full refactor)
-- [ ] Sprint 4: Auth Commands + Notifications (domain events for cache invalidation)
-- [ ] Sprint 5: LoggingBehavior
+### Sprint 3 — Employee Queries + Commands (Score: 9.5/10)
+- [x] `GetAllEmployeesQuery : PagedRequest` — dynamic filters (Search, DepartmentId, Gender)
+- [x] `GetAllEmployeesHandler` — includes Department navigation
+- [x] `GetEmployeeByIdHandler` — includes Department for DepartmentName
+- [x] `CreateEmployeeCommand/Handler` — all 10 properties
+- [x] `UpdateEmployeeCommand/Handler` — NotFoundException + full update
+- [x] `DeleteEmployeeCommand : IRequest` (void) — soft delete, no cache
+- [x] Validators target Commands (10 rules on Create)
+- [x] EmployeeController uses only IMediator (Admin,HR for writes, Admin for delete)
+- [x] EmployeeService + IEmployeeService deleted
 
-**Interview topics this covers:**
+### Sprint 4 — Auth Refactor (Score: 9.5/10)
+- [x] `RegisterCommand/Handler` — BCrypt hashing, email uniqueness, JWT generation
+- [x] `LoginCommand/Handler` — user enumeration prevention, token rotation
+- [x] `RefreshTokenCommand/Handler` — BONUS (not assigned, developer added it)
+- [x] Handlers inject IUnitOfWork + IJwtTokenService + IOptions<JwtSettings>
+- [x] Validators renamed to target Commands (RegisterCommandValidator, LoginCommandValidator)
+- [x] AuthController uses only IMediator
+- [x] AuthService + IAuthService deleted
+- [x] DependencyInjection.cs: ZERO service registrations
+
+### Sprint 5 — LoggingBehavior (Score: 9.5/10)
+- [x] `LoggingBehavior<TRequest, TResponse>` — IPipelineBehavior with ILogger
+- [x] Structured logging: `{RequestName}`, `{ElapsedMs}` (log aggregation friendly)
+- [x] Stopwatch for execution timing
+- [x] LogInformation on entry/exit, LogError on exception
+- [x] Re-throws with `throw;` (preserves stack trace)
+- [x] Does NOT log request payload (security — passwords, tokens)
+- [x] Registered BEFORE ValidationBehavior (wraps everything, catches validation failures)
+
+### Complete handler inventory (13 total):
+| Feature | Operation | Type | Returns |
+|---|---|---|---|
+| Department | GetAllDepartments | Query | PagedResponse\<DepartmentResponse\> |
+| Department | GetDepartmentById | Query | DepartmentResponse |
+| Department | CreateDepartment | Command | DepartmentResponse |
+| Department | UpdateDepartment | Command | DepartmentResponse |
+| Department | DeleteDepartment | Command | void |
+| Employee | GetAllEmployees | Query | PagedResponse\<EmployeeResponse\> |
+| Employee | GetEmployeeById | Query | EmployeeResponse |
+| Employee | CreateEmployee | Command | EmployeeResponse |
+| Employee | UpdateEmployee | Command | EmployeeResponse |
+| Employee | DeleteEmployee | Command | void |
+| Auth | Register | Command | AuthResponse |
+| Auth | Login | Command | AuthResponse |
+| Auth | RefreshToken | Command | AuthResponse |
+
+### Pipeline flow:
+```
+Request → LoggingBehavior (logs entry + timing)
+            → ValidationBehavior (validates, throws if invalid)
+                → Handler (business logic)
+            ← ValidationBehavior
+         ← LoggingBehavior (logs exit + elapsed ms)
+Response
+```
+
+### Review scores:
+- Sprint 1 (MediatR Setup + Dept Queries): 9.5/10
+- Sprint 2 (Department Commands): 9/10
+- Sprint 3 (Employee Queries + Commands): 9.5/10
+- Sprint 4 (Auth Refactor): 9.5/10
+- Sprint 5 (LoggingBehavior): 9.5/10
+
+**Interview topics covered:**
 - "What is CQRS and when would you use it?"
 - "How does MediatR work? How does it find the right handler?"
 - "What are Pipeline Behaviors? How are they different from HTTP middleware?"
 - "What's the difference between Send and Publish in MediatR?"
-- "How do you handle domain events?"
 - "Can you implement CQRS without MediatR?"
 - "What are the downsides of CQRS?"
+- "Why is Login a Command and not a Query?"
+- "How do you handle cross-cutting concerns in CQRS?"
+- "Where does validation happen in a CQRS architecture?"
+- "Why not log the request payload in LoggingBehavior?"
 
 **Deliverable:** All endpoints refactored to CQRS with MediatR, pipeline behaviors for validation and logging.
 
 ---
 
-## Milestone 6: Background Jobs, Logging & Finishing Touches — NOT STARTED
-**Challenge:** Add production-ready cross-cutting concerns.
+## Project Complete
 
-**You will cover:**
-1. Serilog structured logging (console + file sinks)
-2. Correlation ID middleware
-3. Background job: Daily attendance report (Hosted Service)
-4. API Versioning (URL or header based)
-5. Rate Limiting middleware
-6. Health Checks
-7. Swagger/OpenAPI documentation improvements
-8. Unit Tests (xUnit + Moq — test at least service layer)
+**5 milestones completed. Score trajectory: 7.5 → 8.5 → 8.5 → 9.0 → 9.5**
 
-**Interview topics this covers:**
-- "How do you handle logging in production?"
-- "What background processing have you used?"
-- "How do you version your APIs?"
-- "What testing strategies do you use?"
-
-**Deliverable:** Production-ready API with logging, background jobs, tests, and documentation.
+The EMS project covers: Clean Architecture, Repository + UoW, DTOs + manual mapping, FluentValidation, global exception middleware, JWT auth + refresh tokens, role-based authorization, pagination + filtering + sorting, in-memory caching with bulk invalidation, CQRS with MediatR (13 handlers), and pipeline behaviors (validation + logging).
 
 ---
 
